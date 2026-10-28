@@ -1,0 +1,8 @@
+{
+  "name": "Universal Estimating & Valuation",
+  "description": "Universal construction estimating and valuation suite: norms, rate analysis, measurement book, BOQ and contract valuation for any region and currency.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

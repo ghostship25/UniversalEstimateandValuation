@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/* Excel Grid Styles */
+.excel-grid-lines th, 
+.excel-grid-lines td {
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+}
+.excel-grid-lines tr:hover td {
+  background-color: #f8fafc;
+}
+/* Custom scrollbar for realistic spreadsheet look */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.ribbon-tab {
+  position: relative;
+  transition: all 0.15s ease-in-out;
+}
+.ribbon-tab.active {
+  background-color: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  border-top: 3px solid #107c41;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+  }
+  
+  /* Ensure background colors and borders are preserved exactly in PDF export and print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Hide navigation, buttons, modals, toasts, tooltips when printing */
+  header, nav, button, .print\:hidden {
+    display: none !important;
+  }
+
+  /* Ensure containers take full width without shadows or rounded corners */
+  .max-w-7xl, .max-w-6xl, .max-w-5xl, .max-w-4xl, .max-w-full, .w-full {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Crisp engineering table borders for BOQ, MB, Rate Analysis, Zone Rates */
+  table, .print-table {
+    table-layout: auto !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+    margin-bottom: 1rem !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-row-group !important;
+  }
+
+  th, td {
+    border: 1px solid #1e293b !important; /* solid slate-800 border for crisp spreadsheet table feel */
+    padding: 6px 8px !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important; /* slate-100 */
+    color: #0f172a !important; /* slate-900 */
+    font-weight: 800 !important;
+  }
+
+  /* Remove input styling in print so text appears cleanly inside table cells */
+  input, select, textarea {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    width: auto !important;
+    color: #000 !important;
+    font-weight: inherit !important;
+  }
+}
+

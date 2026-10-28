@@ -1,0 +1,10 @@
+# Conversion notes: Nepal edition -> Universal Estimating & Valuation
+
+- Branding unified (was NIRMANA / Astra-RMS / react-example). Package: `universal-estimating-valuation`.
+- All Devanagari text and Nepali-language fields (`*_np`) removed; the UI and data are English only.
+- Currency is user-configurable (default USD); tax is a generic per-project rate (new projects 10%); number grouping defaults to international (South Asian lakh/crore kept as an option).
+- Districts -> Zones; Nepal agency norms (DUDBC/DOR/DOI...) -> neutral Buildings/Roads/Irrigation/Water Supply catalogs; Karya Sampanna -> Completion Certificate; Bikram Sambat date fields (`*_bs`) -> `*_iso`.
+- File extensions: projects `.uep`, templates `.uet`. Storage keys now `uev_*`: data saved by the old build will not load.
+- Removed unreachable legacy files (Navbar, Header, InitialSetupWizard, DocsViewer, ImportExportView, ResourceMasterView, RateDiagnosticsModal, EmbeddedMBSpreadsheet, ipcBridge, DOR equipment/transport engines and data).
+- Fixed: 0% tax falling back to 13%; invented fallback amounts in the IPC bill; path traversal in `/api/docs/:filename`; missing PWA/build icons; electron/electron-builder missing from devDependencies.
+- Known gaps: VariationOrderView, ContractSetupView and IPCBillView are not all reachable from navigation; sample rates are illustrative; English wording of converted strings has not had human review.

@@ -1,0 +1,10 @@
+node_modules/
+build/*
+!build/icon.png
+dist/
+dist-desktop/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example

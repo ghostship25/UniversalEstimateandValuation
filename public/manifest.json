@@ -1,0 +1,23 @@
+{
+  "short_name": "UEV",
+  "name": "Universal Estimating & Valuation",
+  "icons": [
+    {
+      "src": "pwa-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "pwa-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a8a",
+  "display": "standalone",
+  "orientation": "any",
+  "description": "Construction estimating, rate analysis, measurement book, BOQ and contract valuation for any region, currency and standard."
+}
