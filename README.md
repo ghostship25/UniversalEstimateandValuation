@@ -86,11 +86,6 @@ Project files use `.uep` and master templates use `.uet` (both JSON).
 
 Everything runs locally unless you enable the optional AI assistant, which sends your prompt and limited project context to the Gemini API.
 
-## Deploy: push to GitHub and it publishes itself
-
-`.github/workflows/deploy.yml` type-checks, builds and publishes the app to GitHub Pages on every push to `main`.
-
-One-time setup: in the GitHub repo open **Settings → Pages → Build and deployment → Source: GitHub Actions**. After that, `git add . && git commit -m "message" && git push` is all you need. The site appears at `https://<your-user>.github.io/<repo>/` (see the Actions tab for the run and the URL).
 
 The app is fully client-side (data stays in the browser), so Pages is enough. The optional Gemini AI endpoints in `server.ts` need a Node host (Render, Railway, Fly.io); set `GEMINI_API_KEY` there as an environment variable, never in the repo.
 
