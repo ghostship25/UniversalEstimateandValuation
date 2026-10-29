@@ -170,19 +170,24 @@ export const UserManualView: React.FC<UserManualViewProps> = ({ onNavigateToTab 
 
   const mbFormulaExamples = [
     {
-      formula: '=SUM(L1:L5)',
-      description: 'Aggregates a range of dimension values across sub-measurement lines L1 through L5.',
-      example: 'Length cell set to =SUM(L1:L3) -> Adds lengths of rows 1, 2, and 3.'
+      formula: '= (click a cell) Enter',
+      description: 'Point-and-click linking, just like Excel. Type = in a No., L, B, H, custom-column cell, click the cell you want to link (same item or another item, or an item\'s Total Quantity) and press Enter. Esc cancels.',
+      example: 'Type = then click row 1 Length -> =L1. Add *2 and press Enter -> =L1*2.'
     },
     {
-      formula: '=N(r1)*L*B*H',
-      description: 'Cross-references another sub-measurement row\'s count or result and multiplies with current dimensions.',
-      example: 'No. cell set to =N(r1) -> Inherits the unit count from row 1.'
+      formula: '=L1*2',
+      description: 'Same item: column letter (N, L, B, H, Q = No., Length, Breadth, Height, Quantity) plus the row number shown in the R# badge.',
+      example: 'Row 2 Length set to =L1*2 -> twice the length of row 1. Updates live when row 1 changes.'
     },
     {
-      formula: '=REF(item_id)',
-      description: 'Links quantity directly to another BOQ item\'s calculated total.',
-      example: 'Used for linked works like shuttering area based on concrete volume.'
+      formula: '=I2.R1.L',
+      description: 'Another item: I<item number>.R<row number>.<column>. Use .QTY for a row or item quantity, or a custom column name.',
+      example: '=I1.QTY/1000 -> the total quantity of item 1 divided by 1000.'
+    },
+    {
+      formula: '=SUM(L1:L3)',
+      description: 'Aggregates a range of values from rows of the same item.',
+      example: 'Length cell set to =SUM(L1:L3) -> adds lengths of rows 1, 2 and 3.'
     }
   ];
 

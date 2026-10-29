@@ -85,12 +85,5 @@
     "vite": "^6.2.3",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8"
-  },
-  "allowScripts": {
-    "@google/genai@2.31.0": true,
-    "electron@33.4.11": true,
-    "esbuild@0.25.12": true,
-    "esbuild@0.28.2": true,
-    "protobufjs@7.6.6": true
   }
 }

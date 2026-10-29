@@ -7,7 +7,7 @@ A web and desktop application for construction cost estimating and contract valu
 - **Norms & rate analysis** – Resource breakdowns (labor, material, equipment), percentage-based resources, overhead and profit, and one-click transfer of rates into the BOQ. Import or export norms as CSV/Excel.
 - **Zone rates** – Rate schedules per zone/location and fiscal year, with labor and material multipliers and per-resource tax status (taxable / tax-exempt).
 - **Two pricing modes** – Client estimate mode (material rates net of tax, tax applied on the taxable subtotal) and contractor mode (tax included in material rates).
-- **Measurement Book** – Hierarchical sub-measurements, spreadsheet-style formulas (`=SUM(L1:L5)`, `=REF(item_id)`), custom dimension columns, deductions, precision and rounding settings.
+- **Measurement Book (Estimate MB and Valuation MB)** – Excel-style cell linking: type `=` in a No./L/B/H/custom cell, click the cell you want to link (same item, another item, or an item's total quantity) and press Enter. Typed references work too: `=L1*2` (same item), `=I2.R1.L` (other item), `=I1.QTY/1000`, `=SUM(L1:L3)`. Linked cells update live. Plus custom dimension columns, deductions, precision and rounding settings.
 - **BOQ / abstract of estimate** – Live quantity sync from the MB, contingency, tax, grand total, Excel and print output.
 - **Valuation** – Valuation MB, contract setup, interim payment certificates (retention, advance recovery, tax), variation orders (component present, not yet linked in navigation) and completion certificate.
 - **Drawing tools** – Parametric template drawings, bar bending schedules and visual geometry-to-MB mapping.
@@ -55,3 +55,11 @@ Project files use `.uep` and master templates use `.uet` (both JSON).
 ## Privacy
 
 Everything runs locally unless you enable the optional AI assistant, which sends your prompt and limited project context to the Gemini API.
+
+## Deploy: push to GitHub and it publishes itself
+
+`.github/workflows/deploy.yml` type-checks, builds and publishes the app to GitHub Pages on every push to `main`.
+
+One-time setup: in the GitHub repo open **Settings → Pages → Build and deployment → Source: GitHub Actions**. After that, `git add . && git commit -m "message" && git push` is all you need. The site appears at `https://<your-user>.github.io/<repo>/` (see the Actions tab for the run and the URL).
+
+The app is fully client-side (data stays in the browser), so Pages is enough. The optional Gemini AI endpoints in `server.ts` need a Node host (Render, Railway, Fly.io); set `GEMINI_API_KEY` there as an environment variable, never in the repo.

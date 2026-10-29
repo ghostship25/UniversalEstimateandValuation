@@ -54,7 +54,7 @@ import { exportMBToExcel, exportValuationMBToExcel } from '../../services/excelE
 import * as XLSX from 'xlsx';
 import { evaluateMBFormula, resolveFieldValue } from '../../services/mbFormulaEvaluator';
 import { recalculateSingleMBRows, recalculateItemTotal as calcItemTotal, recalculateAllProjectItems } from '../../services/mbDependencyEngine';
-import { SpreadsheetCell } from '../../components/SpreadsheetCell';
+import { SpreadsheetCell, PointTarget } from '../../components/SpreadsheetCell';
 // EmbeddedMBSpreadsheet removed as per Excel Live Sync preference
 import { OfficeLiveSyncModal } from '../../components/OfficeLiveSyncModal';
 
@@ -3236,6 +3236,12 @@ Measurement Book
                                             ))}
                                           </select>
                                         )}
+                                        <span
+                                          className="shrink-0 text-[9px] font-mono font-black text-sky-800 bg-sky-100 border border-sky-200 rounded px-1 py-0.5 print:hidden"
+                                          title={`Row ${rIdx + 1}. Use in formulas as L${rIdx + 1}, B${rIdx + 1}, H${rIdx + 1}, N${rIdx + 1}, Q${rIdx + 1}`}
+                                        >
+                                          R{rIdx + 1}
+                                        </span>
                                         <input
                                           type="text"
                                           value={r.particulars}
@@ -3254,6 +3260,7 @@ Measurement Book
                                         precision={item.precision ?? 2}
                                         isDisabled={!includedCols.includes('no_of_units')}
                                         onEvaluateFormula={(f) => evaluateMBFormula(f, itemValRows as any[], rIdx, valuationEnrichedItems)}
+                                        linkTarget={{ itemIdx: valuationEnrichedItems.findIndex((it) => it.id === item.id), rowIdx: rIdx, prop: 'no_of_units' }}
                                       />
                                     </td>
 
@@ -3265,6 +3272,7 @@ Measurement Book
                                         precision={item.precision ?? 2}
                                         isDisabled={!includedCols.includes('length')}
                                         onEvaluateFormula={(f) => evaluateMBFormula(f, itemValRows as any[], rIdx, valuationEnrichedItems)}
+                                        linkTarget={{ itemIdx: valuationEnrichedItems.findIndex((it) => it.id === item.id), rowIdx: rIdx, prop: 'length' }}
                                       />
                                     </td>
 
@@ -3276,6 +3284,7 @@ Measurement Book
                                         precision={item.precision ?? 2}
                                         isDisabled={!includedCols.includes('breadth')}
                                         onEvaluateFormula={(f) => evaluateMBFormula(f, itemValRows as any[], rIdx, valuationEnrichedItems)}
+                                        linkTarget={{ itemIdx: valuationEnrichedItems.findIndex((it) => it.id === item.id), rowIdx: rIdx, prop: 'breadth' }}
                                       />
                                     </td>
 
@@ -3287,6 +3296,7 @@ Measurement Book
                                         precision={item.precision ?? 2}
                                         isDisabled={!includedCols.includes('height')}
                                         onEvaluateFormula={(f) => evaluateMBFormula(f, itemValRows as any[], rIdx, valuationEnrichedItems)}
+                                        linkTarget={{ itemIdx: valuationEnrichedItems.findIndex((it) => it.id === item.id), rowIdx: rIdx, prop: 'height' }}
                                       />
                                     </td>
 
@@ -3298,6 +3308,7 @@ Measurement Book
                                           onChange={(val) => handleUpdateCustomField(item.id, r.id, colName, String(val))}
                                           precision={item.precision ?? 2}
                                           onEvaluateFormula={(f) => evaluateMBFormula(f, itemValRows as any[], rIdx, valuationEnrichedItems)}
+                                          linkTarget={/^[A-Za-z0-9_]+$/.test(colName) ? { itemIdx: valuationEnrichedItems.findIndex((it) => it.id === item.id), rowIdx: rIdx, prop: colName } : undefined}
                                         />
                                       </td>
                                     ))}
@@ -3307,6 +3318,7 @@ Measurement Book
                                       <SpreadsheetCell
                                         value={r.quantity_this_bill || 0}
                                         isReadOnly={true}
+                                        linkTarget={{ itemIdx: valuationEnrichedItems.findIndex((it) => it.id === item.id), rowIdx: rIdx, prop: 'qty' }}
                                         precision={item.precision ?? 2}
                                         suffix={item.unit}
                                       />
@@ -3334,7 +3346,12 @@ Measurement Book
                                 {activeSubMBId !== 'all' && activeSubMB ? ` (${activeSubMB.code})` : ''}:
                               </td>
                               <td className="p-2.5 text-right text-emerald-900 bg-emerald-100/80 font-black">
-                                {valQty.toFixed(item.precision ?? 2)}
+                                <PointTarget
+                                  target={{ itemIdx: valuationEnrichedItems.findIndex((it) => it.id === item.id), rowIdx: null, prop: 'qty' }}
+                                  title="Click while typing a formula (=) to link this item's total quantity"
+                                >
+                                  {valQty.toFixed(item.precision ?? 2)}
+                                </PointTarget>
                               </td>
                               <td></td>
                             </tr>

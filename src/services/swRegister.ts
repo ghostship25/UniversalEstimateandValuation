@@ -80,7 +80,7 @@ export function registerServiceWorker() {
 
     const registerSW = async () => {
       try {
-        const registration = await navigator.serviceWorker.register('/sw.js');
+        const registration = await navigator.serviceWorker.register(`${(import.meta as any).env?.BASE_URL ?? "./"}sw.js`);
         console.log('[PWA] Service Worker registered successfully:', registration.scope);
         currentState.isRegistered = true;
         notifyListeners();

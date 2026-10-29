@@ -8,3 +8,9 @@
 - Removed unreachable legacy files (Navbar, Header, InitialSetupWizard, DocsViewer, ImportExportView, ResourceMasterView, RateDiagnosticsModal, EmbeddedMBSpreadsheet, ipcBridge, DOR equipment/transport engines and data).
 - Fixed: 0% tax falling back to 13%; invented fallback amounts in the IPC bill; path traversal in `/api/docs/:filename`; missing PWA/build icons; electron/electron-builder missing from devDependencies.
 - Known gaps: VariationOrderView, ContractSetupView and IPCBillView are not all reachable from navigation; sample rates are illustrative; English wording of converted strings has not had human review.
+
+## Added: Excel-style cell linking (Estimate MB and Valuation MB)
+- Type `=`, click any other cell (same item, other item, or an item total), press Enter. Esc cancels; clicking a second cell replaces the last pointed reference; linked cells are highlighted and show an `R#` row badge.
+- Same item: `L1`, `B1`, `H1`, `N1`, `Q1`; other item: `I2.R1.L`, `I2.R1.QTY`, `I2.QTY`; ranges: `SUM(L1:L3)`.
+- Fixed: formula cells kept showing stale values until reload when their source changed; Esc could commit the draft.
+- Code: `src/services/formulaPointing.ts`, `src/components/SpreadsheetCell.tsx`.

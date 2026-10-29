@@ -42,7 +42,7 @@ import { downloadPrintableHTML } from '../services/printExport';
 import { exportMBToExcel } from '../services/excelExport';
 import { evaluateMBFormula, resolveFieldValue } from '../services/mbFormulaEvaluator';
 import { recalculateSingleMBRows, recalculateItemTotal as calcItemTotal, recalculateAllProjectItems } from '../services/mbDependencyEngine';
-import { SpreadsheetCell } from './SpreadsheetCell';
+import { SpreadsheetCell, PointTarget } from './SpreadsheetCell';
 // Remove EmbeddedMBSpreadsheet import
 import { OfficeLiveSyncModal } from './OfficeLiveSyncModal';
 import {
@@ -2568,6 +2568,7 @@ Measurement Book
           {project.items.map((item, idx) => {
             const isExpanded = expandAllItems || expandedItemId === item.id;
             const mbRows = item.mb_rows || [];
+            const linkItemIdx = project.items.findIndex((it) => it.id === item.id);
             const unitRate = getItemUnitRate(item);
             const customCols = item.custom_column_names || [];
             const itemPrecision = item.precision ?? project.user_estimate_config?.quantity_precision ?? 2;
@@ -2621,6 +2622,7 @@ Measurement Book
                       handleUpdateCustomField(item.id, r.id, colName, String(newVal))
                     }
                     onEvaluateFormula={(f) => evaluateMBFormula(f, mbRows, rIdx, project.items)}
+                    linkTarget={/^[A-Za-z0-9_]+$/.test(colName) ? { itemIdx: linkItemIdx, rowIdx: rIdx, prop: colName } : undefined}
                     placeholder={`Enter ${colName}`}
                     className="text-center font-medium"
                     precision={itemPrecision}
@@ -2712,13 +2714,17 @@ Measurement Book
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Quantity</span>
-                      <span className="text-base font-mono font-black text-blue-900">
+                      <PointTarget
+                        target={{ itemIdx: linkItemIdx, rowIdx: null, prop: 'qty' }}
+                        title="Click while typing a formula (=) to link this item's total quantity"
+                        className="text-base font-mono font-black text-blue-900"
+                      >
                         {scopeQty.toLocaleString('en-US', {
                           minimumFractionDigits: itemPrecision,
                           maximumFractionDigits: itemPrecision
                         })}{' '}
                         <span className="text-xs font-normal text-slate-600">{item.unit}</span>
-                      </span>
+                      </PointTarget>
                     </div>
 
                     <div className="flex items-center gap-1.5 pl-2 border-l border-slate-300">
@@ -3070,6 +3076,12 @@ Measurement Book
                                           ))}
                                         </select>
                                       )}
+                                      <span
+                                        className="shrink-0 text-[9px] font-mono font-black text-sky-800 bg-sky-100 border border-sky-200 rounded px-1 py-0.5 print:hidden"
+                                        title={`Row ${rIdx + 1} of item ${linkItemIdx + 1}. Use in formulas as L${rIdx + 1}, B${rIdx + 1}, H${rIdx + 1}, N${rIdx + 1}, Q${rIdx + 1}`}
+                                      >
+                                        R{rIdx + 1}
+                                      </span>
                                       <input
                                         type="text"
                                         value={r.particulars}
@@ -3091,6 +3103,7 @@ Measurement Book
                                         handleUpdateSubRow(item.id, r.id, 'no_of_units', newVal)
                                       }
                                       onEvaluateFormula={(f) => evaluateMBFormula(f, mbRows, rIdx, project.items)}
+                                      linkTarget={{ itemIdx: linkItemIdx, rowIdx: rIdx, prop: 'no_of_units' }}
                                       type="number"
                                       step="0.1"
                                       className="text-center"
@@ -3107,6 +3120,7 @@ Measurement Book
                                         handleUpdateSubRow(item.id, r.id, 'length', newVal)
                                       }
                                       onEvaluateFormula={(f) => evaluateMBFormula(f, mbRows, rIdx, project.items)}
+                                      linkTarget={{ itemIdx: linkItemIdx, rowIdx: rIdx, prop: 'length' }}
                                       type="number"
                                       step="0.01"
                                       className="text-center"
@@ -3121,6 +3135,7 @@ Measurement Book
                                         handleUpdateSubRow(item.id, r.id, 'breadth', newVal)
                                       }
                                       onEvaluateFormula={(f) => evaluateMBFormula(f, mbRows, rIdx, project.items)}
+                                      linkTarget={{ itemIdx: linkItemIdx, rowIdx: rIdx, prop: 'breadth' }}
                                       type="number"
                                       step="0.01"
                                       className="text-center"
@@ -3135,6 +3150,7 @@ Measurement Book
                                         handleUpdateSubRow(item.id, r.id, 'height', newVal)
                                       }
                                       onEvaluateFormula={(f) => evaluateMBFormula(f, mbRows, rIdx, project.items)}
+                                      linkTarget={{ itemIdx: linkItemIdx, rowIdx: rIdx, prop: 'height' }}
                                       type="number"
                                       step="0.01"
                                       className="text-center"
@@ -3156,6 +3172,7 @@ Measurement Book
                                         )
                                       }
                                       onEvaluateFormula={(f) => evaluateMBFormula(f, mbRows, rIdx, project.items)}
+                                      linkTarget={{ itemIdx: linkItemIdx, rowIdx: rIdx, prop: 'qty' }}
                                       isCalculated={!r.formula}
                                       suffix={item.unit}
                                       precision={itemPrecision}
@@ -3514,13 +3531,18 @@ Measurement Book
             </div>
 
             <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 text-xs text-blue-950 space-y-1">
-              <div className="font-bold text-blue-900">💡 How to Link Cells & Custom Columns in MB:</div>
-              <p>In any numeric cell (No, L, B, H, Custom Column, or Qty), type <code className="bg-white px-1.5 py-0.5 rounded border font-mono font-bold text-blue-700">=ITEM("1.1").QTY</code> or click a button below to copy syntax.</p>
-              <div className="flex flex-wrap gap-2 pt-1 font-mono text-[11px]">
+              <div className="font-bold text-blue-900">💡 Link cells like Excel: type <code className="bg-white px-1.5 py-0.5 rounded border font-mono font-bold text-blue-700">=</code>, click the cell you want, press Enter</div>
+              <ol className="list-decimal pl-5 space-y-0.5">
+                <li>Click a No., Length, Breadth, Height or custom-column cell and type <b>=</b>.</li>
+                <li>Click any other cell, in the same item or a different item (or an item's Total Quantity). Its reference is inserted automatically and the cell is highlighted. Click a different cell to replace the reference.</li>
+                <li>Type an operator and click more cells (for example <code className="font-mono">=L1*2+I2.R1.H</code>), then press <b>Enter</b> to confirm or <b>Esc</b> to cancel.</li>
+              </ol>
+              <p>Each row shows an <b>R#</b> badge. Linked cells update live when the source changes. You can also type references by hand:</p>
+<div className="flex flex-wrap gap-2 pt-1 font-mono text-[11px]">
                 <span className="bg-white px-2 py-0.5 rounded border border-blue-200"><b>=ITEM("1.1").QTY</b> (Item Total)</span>
                 <span className="bg-white px-2 py-0.5 rounded border border-blue-200"><b>=I1.R1.L</b> (Item 1 Row 1 Length)</span>
                 <span className="bg-white px-2 py-0.5 rounded border border-blue-200"><b>=I1.R1.Thickness</b> (Custom Column)</span>
-                <span className="bg-white px-2 py-0.5 rounded border border-blue-200"><b>=R1.L * 2</b> (Same Item Row 1)</span>
+                <span className="bg-white px-2 py-0.5 rounded border border-blue-200"><b>=L1 * 2</b> (Same item: column letter + row number: N, L, B, H, Q)</span>
               </div>
             </div>
 

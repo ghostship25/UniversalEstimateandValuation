@@ -1,5 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { calcQuantityVal } from '../services/rateEngine';
+import {
+  LinkTarget,
+  PointSession,
+  buildRef,
+  formulaPointing,
+  referencedKeys,
+  sameTarget,
+  targetKey,
+  usePointingVersion,
+} from '../services/formulaPointing';
 
 interface SpreadsheetCellProps {
   value: number | string;
@@ -17,6 +28,11 @@ interface SpreadsheetCellProps {
   precision?: number;
   truncate?: boolean;
   onEvaluateFormula?: (formulaStr: string) => number | string;
+  /**
+   * Identity of this cell for Excel-style point-and-click linking. When set, this cell can be
+   * clicked while another cell's formula is being typed (after "=" or an operator) to insert a reference.
+   */
+  linkTarget?: LinkTarget;
 }
 
 /**
@@ -39,11 +55,18 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
   suffix,
   precision,
   truncate = false,
-  onEvaluateFormula
+  onEvaluateFormula,
+  linkTarget
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [displayInput, setDisplayInput] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef<string>('');
+  const lastInsertRef = useRef<{ start: number; end: number } | null>(null);
+  const pendingCaretRef = useRef<number | null>(null);
+  const sessionRef = useRef<PointSession | null>(null);
+  const cancelledRef = useRef(false);
+  usePointingVersion(); // re-render when a formula is being pointed so highlights stay in sync
 
   const getEvaluatedDisplay = (val: number | string): string => {
     if (typeof val === 'string' && val.trim().startsWith('=')) {
@@ -75,12 +98,86 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
     }
   }, [value, isEditing]);
 
+  const endSession = () => {
+    if (sessionRef.current) formulaPointing.clearIf(sessionRef.current);
+    sessionRef.current = null;
+    lastInsertRef.current = null;
+  };
+
+  const updateDraft = (next: string) => {
+    draftRef.current = next;
+    setDisplayInput(next);
+  };
+
   const handleFocus = () => {
     setIsEditing(true);
     // Show raw formula string when focused for editing
-    setDisplayInput(String(value ?? ''));
+    updateDraft(String(value ?? ''));
     if (onFocusCell) onFocusCell();
+
+    const s: PointSession = {
+      origin: linkTarget || null,
+      getDraft: () => draftRef.current,
+      canPoint: () => {
+        const el = inputRef.current;
+        const d = draftRef.current;
+        if (!el || !d.trim().startsWith('=')) return false;
+        const caret = el.selectionStart ?? d.length;
+        if (/[=+\-*/(,^]\s*$/.test(d.slice(0, caret))) return true;
+        const li = lastInsertRef.current;
+        return !!li && li.end === caret;
+      },
+      insertRef: (ref: string) => {
+        const el = inputRef.current;
+        const d = draftRef.current;
+        let start = el?.selectionStart ?? d.length;
+        let end = el?.selectionEnd ?? start;
+        const li = lastInsertRef.current;
+        if (li && li.end === start && start === end) {
+          start = li.start; // Excel behaviour: clicking another cell replaces the last pointed reference
+        }
+        const next = d.slice(0, start) + ref + d.slice(end);
+        lastInsertRef.current = { start, end: start + ref.length };
+        pendingCaretRef.current = start + ref.length;
+        updateDraft(next);
+        formulaPointing.touch();
+      },
+    };
+    sessionRef.current = s;
+    formulaPointing.setSession(s);
   };
+
+  // restore caret after a reference was inserted
+  useLayoutEffect(() => {
+    if (pendingCaretRef.current !== null && inputRef.current) {
+      const pos = pendingCaretRef.current;
+      pendingCaretRef.current = null;
+      inputRef.current.focus();
+      inputRef.current.setSelectionRange(pos, pos);
+    }
+  }, [displayInput]);
+
+  useEffect(() => () => endSession(), []);
+
+  // Clicking this cell while another cell's formula is waiting for an operand inserts a reference.
+  const handlePointMouseDown = (e: React.MouseEvent) => {
+    if (!linkTarget) return;
+    const s = formulaPointing.getSession();
+    if (!s || sameTarget(s.origin, linkTarget) || !s.canPoint()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    s.insertRef(buildRef(s.origin, linkTarget));
+  };
+
+  const pointSession = formulaPointing.getSession();
+  const pointingActive = !!(pointSession && linkTarget && !sameTarget(pointSession.origin, linkTarget) && pointSession.canPoint());
+  const isReferenced = !!(
+    pointSession && linkTarget && !sameTarget(pointSession.origin, linkTarget) &&
+    referencedKeys(pointSession.getDraft(), pointSession.origin).has(targetKey(linkTarget))
+  );
+  const pointClasses = `${pointingActive ? 'cursor-crosshair hover:ring-2 hover:ring-sky-400 rounded' : ''} ${
+    isReferenced ? 'ring-2 ring-sky-500 ring-offset-1 bg-sky-50 rounded' : ''
+  }`;
 
   const parseFormulaOrValue = (valStr: string): number | string => {
     const trimmed = valStr.trim();
@@ -101,9 +198,12 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
   };
 
   const handleCommit = () => {
+    if (cancelledRef.current) { cancelledRef.current = false; return; }
+    if (!isEditing) return;
     setIsEditing(false);
-    const parsed = parseFormulaOrValue(displayInput);
-    onChange(parsed);
+    endSession();
+    const parsed = parseFormulaOrValue(draftRef.current || displayInput);
+    onChange?.(parsed);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -112,7 +212,10 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
       handleCommit();
       inputRef.current?.blur();
     } else if (e.key === 'Escape') {
+      cancelledRef.current = true;
+      draftRef.current = String(value ?? '');
       setIsEditing(false);
+      endSession();
       setDisplayInput(getEvaluatedDisplay(value));
       inputRef.current?.blur();
     }
@@ -127,8 +230,9 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
           isCalculated
             ? 'bg-blue-50/80 text-blue-900 font-black border border-blue-200/80'
             : 'bg-slate-50 text-slate-700 font-bold'
-        } ${className}`}
+        } ${className} ${pointClasses}`}
         title={cellRefName ? `Cell ${cellRefName} (Calculated)` : 'Calculated Value'}
+        onMouseDownCapture={handlePointMouseDown}
       >
         <span className="truncate">
           {typeof value === 'number'
@@ -152,14 +256,19 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
     <div
       className={`relative group ${
         isEditing ? 'ring-2 ring-emerald-500 rounded bg-emerald-50/20 z-10' : ''
-      }`}
+      } ${pointClasses}`}
+      onMouseDownCapture={handlePointMouseDown}
     >
       <input
         ref={inputRef}
         type="text"
         disabled={isDisabled}
-        value={displayInput}
-        onChange={(e) => setDisplayInput(e.target.value)}
+        value={isEditing ? displayInput : getEvaluatedDisplay(value)}
+        onChange={(e) => {
+          lastInsertRef.current = null;
+          updateDraft(e.target.value);
+          formulaPointing.touch();
+        }}
         onFocus={handleFocus}
         onBlur={handleCommit}
         onKeyDown={handleKeyDown}
@@ -168,6 +277,14 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
           isDisabled ? 'bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed' : ''
         } ${isFormula ? 'text-emerald-800 bg-emerald-50/40' : ''} ${className}`}
       />
+      {isEditing && displayInput.trim().startsWith('=') && typeof document !== 'undefined' &&
+        createPortal(
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none bg-slate-900/95 text-white rounded-lg shadow-xl px-3 py-1.5 text-xs flex items-center gap-3 max-w-[90vw]">
+            <span className="font-mono font-bold text-emerald-300 truncate">ƒx {displayInput}</span>
+            <span className="text-slate-300 whitespace-nowrap">Click a cell to link · Enter to confirm · Esc to cancel</span>
+          </div>,
+          document.body
+        )}
       {isFormula && !isEditing && (
         <span
           className="absolute right-1 top-1.5 text-[9px] font-sans font-bold bg-emerald-100 text-emerald-800 px-1 rounded pointer-events-none"
@@ -177,5 +294,39 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
         </span>
       )}
     </div>
+  );
+};
+
+
+/**
+ * Wrap any non-input element (e.g. an item's total quantity) so it can be clicked to insert a reference
+ * while a formula is being typed in a SpreadsheetCell.
+ */
+export const PointTarget: React.FC<{
+  target: LinkTarget;
+  className?: string;
+  title?: string;
+  children: React.ReactNode;
+}> = ({ target, className = '', title, children }) => {
+  usePointingVersion();
+  const s = formulaPointing.getSession();
+  const active = !!(s && !sameTarget(s.origin, target) && s.canPoint());
+  const referenced = !!(s && referencedKeys(s.getDraft(), s.origin).has(targetKey(target)));
+  return (
+    <span
+      className={`${className} ${active ? 'cursor-crosshair hover:ring-2 hover:ring-sky-400 rounded' : ''} ${
+        referenced ? 'ring-2 ring-sky-500 ring-offset-1 bg-sky-50 rounded' : ''
+      }`}
+      title={title}
+      onMouseDownCapture={(e) => {
+        const sess = formulaPointing.getSession();
+        if (!sess || sameTarget(sess.origin, target) || !sess.canPoint()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        sess.insertRef(buildRef(sess.origin, target));
+      }}
+    >
+      {children}
+    </span>
   );
 };

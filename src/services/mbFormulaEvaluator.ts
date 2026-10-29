@@ -156,6 +156,9 @@ export function evaluateMBFormula(
     return String(customSum || Number(targetItem.estimated_quantity) || 0);
   });
 
+  // 0c. Excel-style column ranges: SUM(L1:L3) -> SUM(R1:R3.L)
+  expr = expr.replace(/sum\s*\(\s*([lbhnq])([0-9]+)\s*:\s*\1([0-9]+)\s*\)/gi, (_, c, a, b) => `SUM(R${a}:R${b}.${c})`);
+
   // 1. Expand range functions like SUM(R1:R4) or SUM(R1:R4.Thickness)
   expr = expr.replace(/sum\s*\(\s*r([0-9]+)\s*:\s*r([0-9]+)(?:\.([a-z0-9_]+))?\s*\)/gi, (_, startStr, endStr, propStr) => {
     const start = parseInt(startStr, 10) - 1;
