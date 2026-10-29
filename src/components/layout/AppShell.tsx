@@ -1138,6 +1138,14 @@ export const AppShell: React.FC<AppShellProps> = ({
                   <span className="text-[10px] font-semibold leading-tight text-center">+ Col<br />Custom</span>
                 </button>
                 <button
+                  onClick={() => dispatchToolAction('uev:mb-open-takeoff')}
+                  className="flex flex-col items-center justify-center p-1 rounded hover:bg-white hover:border-slate-300 border border-transparent transition cursor-pointer text-slate-700 hover:text-slate-900 group"
+                  title="PDF / Drawing Takeoff: measure lengths, areas and counts on a drawing and send them to the MB"
+                >
+                  <Ruler className="w-4 h-4 text-emerald-600 mb-0.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] font-semibold leading-tight text-center">PDF<br />Takeoff</span>
+                </button>
+                <button
                   onClick={() => dispatchToolAction('uev:mb-link-guide')}
                   className="flex flex-col items-center justify-center p-1 rounded hover:bg-white hover:border-slate-300 border border-transparent transition cursor-pointer text-slate-700 hover:text-slate-900 group shadow-2xs hover:shadow-xs min-w-[48px]"
                   title="Cell Link Guide & Formula Syntax Reference (=ITEM.QTY, etc.)"
@@ -1782,6 +1790,14 @@ export const AppShell: React.FC<AppShellProps> = ({
                   <span className="text-[10px] font-semibold leading-tight text-center">Running<br/>Bill (IPC)</span>
                 </button>
                 <button
+                  onClick={() => dispatchToolAction('uev:vmb-open-takeoff')}
+                  className="flex flex-col items-center justify-center p-1 rounded hover:bg-white hover:border-slate-300 border border-transparent transition cursor-pointer text-slate-700 hover:text-slate-900 group"
+                  title="PDF / Drawing Takeoff: measure lengths, areas and counts on a drawing and send them to the MB"
+                >
+                  <Ruler className="w-4 h-4 text-emerald-600 mb-0.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] font-semibold leading-tight text-center">PDF<br />Takeoff</span>
+                </button>
+                <button
                   onClick={() => setActiveTab('contract-agreement')}
                   className="flex flex-col items-center justify-center p-1 rounded hover:bg-white hover:border-slate-300 border border-transparent transition cursor-pointer text-slate-700 hover:text-slate-900 group shadow-2xs hover:shadow-xs min-w-[54px]"
                   title="Contract Agreement &amp; Tender Schedule"
@@ -1804,7 +1820,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                   <span>Mob. Recovery: <strong>Auto</strong></span>
                 </div>
                 <div className="flex items-center space-x-2 text-[10px] text-slate-600 px-1 font-mono">
-                  <span>Tax: <strong>13% Added</strong></span>
+                  <span>Tax: <strong>Per project</strong></span>
                   <span>•</span>
                   <span>Security Dep: <strong>Held</strong></span>
                 </div>

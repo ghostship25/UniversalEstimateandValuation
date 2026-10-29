@@ -206,6 +206,7 @@ export interface MBRow {
   quantity: number;    // Calculated: no_of_units * length * breadth * height or evaluated formula
   remarks?: string;
   custom_fields?: Record<string, string>; // Extra user-defined columns
+  takeoff_id?: string; // Id of the PDF takeoff measurement this row was created from
 }
 
 export interface ProvisionalItem {
@@ -429,6 +430,7 @@ export interface ValuationMBRow {
   is_heading?: boolean;
   verified_by?: string;
   remarks?: string;
+  takeoff_id?: string; // Id of the PDF takeoff measurement this row was created from
 }
 
 export interface IPCBill {

@@ -14,3 +14,8 @@
 - Same item: `L1`, `B1`, `H1`, `N1`, `Q1`; other item: `I2.R1.L`, `I2.R1.QTY`, `I2.QTY`; ranges: `SUM(L1:L3)`.
 - Fixed: formula cells kept showing stale values until reload when their source changed; Esc could commit the draft.
 - Code: `src/services/formulaPointing.ts`, `src/components/SpreadsheetCell.tsx`.
+
+## Added: PDF / image takeoff (Estimate MB and Valuation MB)
+- Ribbon button 'PDF Takeoff' (Estimate > Entries & Calc, Valuation > Valuation Stages). Code in `src/modules/takeoff/`.
+- Fixed: adding a Valuation MB row also added a phantom row to the Estimate MB (estimate quantities were inflated); removed a hardcoded 'Tax: 13% Added' label from the Valuation ribbon.
+- See `Optimization.md` for the prioritized roadmap.

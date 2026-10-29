@@ -43,6 +43,8 @@ import { exportMBToExcel } from '../services/excelExport';
 import { evaluateMBFormula, resolveFieldValue } from '../services/mbFormulaEvaluator';
 import { recalculateSingleMBRows, recalculateItemTotal as calcItemTotal, recalculateAllProjectItems } from '../services/mbDependencyEngine';
 import { SpreadsheetCell, PointTarget } from './SpreadsheetCell';
+import { PdfTakeoffModal } from '../modules/takeoff/PdfTakeoffModal';
+import type { MBRowSpec } from '../modules/takeoff/takeoffStore';
 // Remove EmbeddedMBSpreadsheet import
 import { OfficeLiveSyncModal } from './OfficeLiveSyncModal';
 import {
@@ -212,6 +214,7 @@ export const MeasurementBookView: React.FC<MeasurementBookViewProps> = ({
 
   // Modal for Linking Cells / MB Items reference guide
   const [linkModalOpen, setLinkModalOpen] = useState<boolean>(false);
+  const [takeoffOpen, setTakeoffOpen] = useState<boolean>(false);
   
   // Modal for MS Excel / LibreOffice Live Sync
   const [isOfficeSyncModalOpen, setIsOfficeSyncModalOpen] = useState<boolean>(false);
@@ -550,6 +553,50 @@ export const MeasurementBookView: React.FC<MeasurementBookViewProps> = ({
     }));
 
     showToast('Added new measurement detail row.');
+  };
+
+
+  // ---- PDF / drawing takeoff -> Estimate MB ---------------------------------------------------
+  const handleTakeoffApplyRow = (itemId: string, spec: MBRowSpec) => {
+    const targetBookId = activeMBBookId !== 'all' ? activeMBBookId : (mbBooks[0]?.id || 'mb_1');
+    const newRow: MBRow = {
+      id: spec.id,
+      mb_book_id: targetBookId,
+      particulars: spec.particulars,
+      no_of_units: spec.no_of_units,
+      length: spec.length,
+      breadth: spec.breadth,
+      height: spec.height,
+      quantity: 0,
+      remarks: spec.remarks,
+      custom_fields: {},
+      takeoff_id: spec.takeoff_id,
+    };
+    setProject((prev) => ({
+      ...prev,
+      items: recalculateAllMBItems(prev.items.map((item) =>
+        item.id === itemId
+          ? recalculateItemTotal({ ...item, mb_rows: [...(item.mb_rows || []), newRow] }, prev.items)
+          : item
+      )),
+    }));
+  };
+  const handleTakeoffSyncRow = (itemId: string, spec: MBRowSpec) => {
+    setProject((prev) => ({
+      ...prev,
+      items: recalculateAllMBItems(prev.items.map((item) =>
+        item.id === itemId
+          ? recalculateItemTotal({
+              ...item,
+              mb_rows: (item.mb_rows || []).map((r) =>
+                r.id === spec.id
+                  ? { ...r, particulars: spec.particulars, no_of_units: spec.no_of_units, length: spec.length, breadth: spec.breadth, height: spec.height, remarks: spec.remarks }
+                  : r
+              ),
+            }, prev.items)
+          : item
+      )),
+    }));
   };
 
   // Update a standard field in a sub-row
@@ -1864,6 +1911,8 @@ Detailed Measurement Rows
     window.addEventListener('uev:mb-set-precision', handleSetPrecision);
     window.addEventListener('uev:mb-blank-sheet', handleBlankSheet);
     window.addEventListener('uev:mb-load-sample', handleLoadSample);
+    const handleOpenTakeoff = () => setTakeoffOpen(true);
+    window.addEventListener('uev:mb-open-takeoff', handleOpenTakeoff);
     window.addEventListener('uev:mb-link-guide', handleLinkGuide);
     window.addEventListener('uev:mb-add-custom-col', handleAddCustomCol);
     window.addEventListener('uev:mb-delete-book', handleDeleteBookAction);
@@ -1887,6 +1936,7 @@ Detailed Measurement Rows
       window.removeEventListener('uev:mb-set-precision', handleSetPrecision);
       window.removeEventListener('uev:mb-blank-sheet', handleBlankSheet);
       window.removeEventListener('uev:mb-load-sample', handleLoadSample);
+      window.removeEventListener('uev:mb-open-takeoff', handleOpenTakeoff);
       window.removeEventListener('uev:mb-link-guide', handleLinkGuide);
       window.removeEventListener('uev:mb-add-custom-col', handleAddCustomCol);
       window.removeEventListener('uev:mb-delete-book', handleDeleteBookAction);
@@ -3509,6 +3559,15 @@ Measurement Book
       )}
 
       {/* Modal for Linking Cells / MB Items */}
+      <PdfTakeoffModal
+        isOpen={takeoffOpen}
+        onClose={() => setTakeoffOpen(false)}
+        mode="estimate"
+        projectKey={`${project.id}:estimate`}
+        items={project.items.map((i) => ({ id: i.id, code: i.item_code || i.code || '', description: i.description, unit: i.unit }))}
+        onApplyRow={handleTakeoffApplyRow}
+        onSyncRow={handleTakeoffSyncRow}
+      />
       {linkModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[80vh] flex flex-col">

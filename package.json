@@ -55,6 +55,7 @@
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.10.1",
@@ -77,13 +78,14 @@
     "@types/react-dom": "^19.2.4",
     "@types/sql.js": "^1.4.11",
     "autoprefixer": "^10.4.21",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "esbuild": "^0.25.0",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
-  }
+    "vite": "^6.2.3"
+  },
+  "license": "GPL-2.0-only"
 }

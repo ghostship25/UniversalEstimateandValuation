@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Ruler,
   Plus,
@@ -60,6 +60,8 @@ import { OfficeLiveSyncModal } from '../../components/OfficeLiveSyncModal';
 
 import { SignatureBlock, CustomTopHeading, HeaderMetadataField } from './CompletionCertificateView';
 import { currencyCode } from '../../services/currency';
+import { PdfTakeoffModal } from '../takeoff/PdfTakeoffModal';
+import type { MBRowSpec } from '../takeoff/takeoffStore';
 
 interface ValuationMBViewProps {
   project: ProjectEstimate;
@@ -94,6 +96,12 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
 }) => {
   const activeBooks = valuationBooks;
   const [activeBookId, setActiveBookId] = useState<string>(activeBooks[0]?.id || '');
+  const [takeoffOpen, setTakeoffOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setTakeoffOpen(true);
+    window.addEventListener('uev:vmb-open-takeoff', open);
+    return () => window.removeEventListener('uev:vmb-open-takeoff', open);
+  }, []);
   const activeBook = activeBooks.find((b) => b.id === activeBookId) || activeBooks[0] || null;
 
   // Enriched items mapping current active Valuation MB rows to mb_rows for formula resolution
@@ -943,6 +951,42 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
   };
 
   // Add a sub-row to a specific BOQ item in Valuation MB
+
+  // ---- PDF / drawing takeoff -> Valuation MB -----------------------------------------------------
+  const takeoffQty = (spec: MBRowSpec, itemId: string) => {
+    const it = project.items.find((i) => i.id === itemId);
+    const prec = it?.precision ?? 2;
+    const f = Math.pow(10, prec);
+    return Math.round(Number(spec.no_of_units) * Number(spec.length) * Number(spec.breadth) * Number(spec.height) * f) / f;
+  };
+  const handleTakeoffApplyRow = (itemId: string, spec: MBRowSpec) => {
+    if (!activeBook) return;
+    const targetSubBookId = activeSubMBId === 'all' ? (subBooks[0]?.id || 'vmb_sub_1') : activeSubMBId;
+    const newRow: ValuationMBRow = {
+      id: spec.id,
+      mb_id: activeBook.id,
+      mb_book_id: targetSubBookId,
+      boq_item_id: itemId,
+      particulars: spec.particulars,
+      no_of_units: spec.no_of_units,
+      length: spec.length,
+      breadth: spec.breadth,
+      height: spec.height,
+      quantity_this_bill: takeoffQty(spec, itemId),
+      verified_by: activeBook.verified_by,
+      remarks: spec.remarks,
+      takeoff_id: spec.takeoff_id,
+    };
+    setValuationRows((prev) => [...prev, newRow]);
+  };
+  const handleTakeoffSyncRow = (itemId: string, spec: MBRowSpec) => {
+    setValuationRows((prev) => prev.map((r) =>
+      r.id === spec.id
+        ? { ...r, particulars: spec.particulars, no_of_units: spec.no_of_units, length: spec.length, breadth: spec.breadth, height: spec.height, remarks: spec.remarks, quantity_this_bill: takeoffQty(spec, itemId) }
+        : r
+    ));
+  };
+
   const handleAddSubRow = (itemId: string) => {
     const existingValRows = valuationRows.filter((r) => r.mb_id === activeBook.id && r.boq_item_id === itemId);
     const targetSubBookId = activeSubMBId === 'all' ? (subBooks[0]?.id || 'vmb_sub_1') : activeSubMBId;
@@ -964,27 +1008,8 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
 
     setValuationRows((prev) => [...prev, newRow]);
 
-    // Also sync to project item mb_rows if needed
-    setProject((prev) => ({
-      ...prev,
-      items: recalculateAllMBItems(prev.items.map((item) => {
-        if (item.id === itemId) {
-          const mbRow: MBRow = {
-            id: newRow.id,
-            particulars: newRow.particulars,
-            no_of_units: newRow.no_of_units,
-            length: newRow.length,
-            breadth: newRow.breadth,
-            height: newRow.height,
-            quantity: newRow.quantity_this_bill
-          };
-          const updatedMbRows = [...(item.mb_rows || []), mbRow];
-          return recalculateItemTotal({ ...item, mb_rows: updatedMbRows }, prev.items);
-        }
-        return item;
-      }))
-    }));
-
+    // Valuation rows live only in valuationRows. (They used to be mirrored into the Estimate MB,
+    // which silently inflated estimate quantities.)
     showToast('Added new measurement detail row.');
   };
 
@@ -2091,6 +2116,15 @@ Net Authority Amount Payable:
 
   return (
     <div className="space-y-6 pb-24">
+      <PdfTakeoffModal
+        isOpen={takeoffOpen}
+        onClose={() => setTakeoffOpen(false)}
+        mode="valuation"
+        projectKey={`${project.id}:valuation`}
+        items={project.items.map((i) => ({ id: i.id, code: i.item_code || i.code || '', description: i.description, unit: i.unit }))}
+        onApplyRow={handleTakeoffApplyRow}
+        onSyncRow={handleTakeoffSyncRow}
+      />
       {/* UNIFIED MODULE WORKBENCH CONTROL BAR */}
       <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-md flex flex-wrap items-center justify-between gap-3 border border-slate-800 print:hidden">
         {/* Left: Context Mode Selector */}
