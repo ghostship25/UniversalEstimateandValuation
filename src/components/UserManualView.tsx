@@ -106,7 +106,7 @@ export const UserManualView: React.FC<UserManualViewProps> = ({ onNavigateToTab 
     {
       module: 'Module 1: Zone Rates',
       button: '✓ Tax Free / Taxable Toggle',
-      description: 'One-click toggle on resource rows to designate items as Tax Free (e.g., unskilled labor, local earth/boulder) or Taxable (13%).',
+      description: 'One-click toggle on resource rows to designate items as Tax Free (e.g., unskilled labor, local earth/boulder) or Taxable.',
       tip: 'Tax Free items are automatically exempted from material tax in Government Estimate mode.',
       tab: 'zone-rates'
     },
@@ -206,7 +206,7 @@ export const UserManualView: React.FC<UserManualViewProps> = ({ onNavigateToTab 
     },
     {
       q: 'How does the Measurement Book handle unentered dimensions vs explicit zeros?',
-      a: 'If a dimension cell (L, B, or H) is left empty or omitted, it renders as a clean dash "-" in official printouts. If you explicitly type "0", it displays as "0" and evaluates mathematically.'
+      a: 'An empty cell (or text such as NA) is skipped in the multiplication, like an empty column on a paper MB: No. 1 × L 3 × B 6 with H empty = 18. A typed 0 is a real value and multiplies: the same row with H = 0 gives 0. If every included column is empty the quantity is 0.'
     },
     {
       q: 'What is the password for the Initiation Lock?',

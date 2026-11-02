@@ -14,6 +14,7 @@ import { calculateItemRate } from '../services/rateEngine';
 import { downloadPrintableHTML } from '../services/printExport';
 import { exportRateAnalysisToExcel } from '../services/excelExport';
 import { currencyCode } from '../services/currency';
+import { defaultTaxPercent } from '../services/taxDefaults';
 
 interface PrintRateAnalysisModalProps {
   isOpen: boolean;
@@ -111,8 +112,8 @@ export const PrintRateAnalysisModal: React.FC<PrintRateAnalysisModalProps> = ({
       fiscalYear: selectedFY,
       mode: calcMode,
       contractorOverheadPercent: overheadPercent,
-      materialTaxPercent: 13,
-      taxPercent: 13,
+      materialTaxPercent: defaultTaxPercent(),
+      taxPercent: defaultTaxPercent(),
       leadKm,
       royaltyPerCum
     });

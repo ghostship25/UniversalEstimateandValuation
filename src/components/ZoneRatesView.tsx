@@ -441,7 +441,7 @@ export const ZoneRatesView: React.FC<ZoneRatesViewProps> = ({
           : r
       )
     );
-    showToast(`Marked ${selectedResourceIds.length} item(s) as ${isTaxFree ? 'Tax Free' : 'Taxable (13%)'}.`);
+    showToast(`Marked ${selectedResourceIds.length} item(s) as ${isTaxFree ? 'Tax Free' : 'Taxable'}.`);
   };
 
   const handleDeleteSelectedResources = () => {
@@ -952,7 +952,7 @@ export const ZoneRatesView: React.FC<ZoneRatesViewProps> = ({
               title="Set selected resources to Taxable (tax applied)"
             >
               <Percent className="w-3.5 h-3.5" />
-              Set Taxable (13%)
+              Set Taxable
             </button>
             <button
               onClick={handleDeleteSelectedResources}
@@ -1083,7 +1083,7 @@ export const ZoneRatesView: React.FC<ZoneRatesViewProps> = ({
                           }`}
                           title="Click to toggle Tax Free / Taxable status"
                         >
-                          {res.is_tax_free ? '✓ Tax Free' : 'Taxable (13%)'}
+                          {res.is_tax_free ? '✓ Tax Free' : 'Taxable'}
                         </button>
                       </td>
                       <td className="p-3 text-center">
@@ -1204,7 +1204,7 @@ export const ZoneRatesView: React.FC<ZoneRatesViewProps> = ({
                     onChange={(e) => setFormState({ ...formState, is_tax_free: e.target.value === 'tax_free' })}
                     className="w-full p-2.5 border rounded-xl font-medium bg-slate-50 focus:bg-white"
                   >
-                    <option value="taxable">Taxable (13%)</option>
+                    <option value="taxable">Taxable</option>
                     <option value="tax_free">Tax Free</option>
                   </select>
                 </div>

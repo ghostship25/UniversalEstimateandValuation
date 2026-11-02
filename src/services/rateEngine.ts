@@ -1,5 +1,6 @@
 import { RateNormItem, ResourceMaster, ZoneInfo, RateCalculationResult } from '../types';
 import { getDefaultResourceRate } from '../data/initialData';
+import { defaultTaxPercent } from './taxDefaults';
 
 /**
  * Normalizes resource names to handle synonyms, spelling differences (e.g. labour vs labor),
@@ -493,9 +494,9 @@ export function calculateItemRate(options: CalculationOptions): RateCalculationR
     fiscalYear,
     mode = 'user',
     contractorOverheadPercent = 15,
-    materialTaxPercent = 13,
-    equipmentTaxPercent = 13,
-    taxPercent = 13,
+    materialTaxPercent = defaultTaxPercent(),
+    equipmentTaxPercent = defaultTaxPercent(),
+    taxPercent = defaultTaxPercent(),
     leadKm = 0,
     royaltyPerCum = 0,
     customResourceRates = {}

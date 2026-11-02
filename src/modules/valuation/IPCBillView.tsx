@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { ProjectEstimate, Contract, ValuationMBRow, IPCBill } from '../../types';
 import { currencyCode } from '../../services/currency';
+import { computeIpc } from '../../services/ipcMath';
 
 interface IPCBillViewProps {
   project: ProjectEstimate;
@@ -42,11 +43,28 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
   }, 0);
 
   const taxRate = project.tax_percent ?? 0;
-  const roundedGross = Math.round(grossAmountThisBill * 100) / 100;
-  const retentionDeduction = Math.round(roundedGross * 0.05 * 100) / 100; // 5% Retention
-  const advanceDeduction = contract?.advance_given ? Math.min(contract.advance_given * 0.1, roundedGross * 0.1) : 0;
-  const taxAmount = Math.round((roundedGross - retentionDeduction - advanceDeduction) * (taxRate / 100) * 100) / 100;
-  const netPayable = Math.round((roundedGross - retentionDeduction - advanceDeduction + taxAmount) * 100) / 100;
+  const earlierBills = ipcBills.filter((b) => b.ipc_number < activeIPCNo);
+  const grossBefore = valuationRows
+    .filter((r) => r.ipc_number < activeIPCNo)
+    .reduce((acc, row) => {
+      const item = project.items.find((i) => i.id === row.boq_item_id);
+      return acc + row.quantity_this_bill * (item?.calculated_unit_rate || 0);
+    }, 0);
+  const calc = computeIpc({
+    grossThisBill: grossAmountThisBill,
+    grossBeforeThisBill: grossBefore,
+    retentionPercent: contract?.retention_percent ?? 0,
+    advanceGiven: contract?.advance_given ?? 0,
+    advanceRecoveryPercent: contract?.advance_recovery_percent ?? 0,
+    advanceRecoveredBefore: earlierBills.reduce((s, b) => s + (b.advance_deduction || 0), 0),
+    taxPercent: taxRate,
+  });
+  const roundedGross = calc.gross;
+  const retentionDeduction = calc.retention;
+  const advanceDeduction = calc.advance;
+  const taxAmount = calc.tax;
+  const netPayable = calc.net;
+  const advanceNotConfigured = !!contract && contract.advance_given > 0 && !(contract.advance_recovery_percent && contract.advance_recovery_percent > 0);
 
   const currentBill = ipcBills.find((b) => b.ipc_number === activeIPCNo);
 
@@ -55,17 +73,17 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
       id: currentBill?.id || `ipc_${Date.now()}`,
       contract_id: contract?.id || 'default_contract',
       ipc_number: activeIPCNo,
-      bill_date_iso: '2026-06-25',
-      period_from_iso: '2026-05-01',
-      period_to_iso: '2026-06-25',
+      bill_date_iso: new Date().toISOString().slice(0, 10),
+      period_from_iso: earlierBills.length ? earlierBills[earlierBills.length - 1].period_to_iso : contract?.start_date_iso || new Date().toISOString().slice(0, 10),
+      period_to_iso: new Date().toISOString().slice(0, 10),
       gross_amount_this_bill: roundedGross,
-      gross_amount_cumulative: roundedGross * activeIPCNo,
+      gross_amount_cumulative: calc.grossCumulative,
       retention_deduction: retentionDeduction,
       advance_deduction: advanceDeduction,
       tax_amount: taxAmount,
       net_payable_amount: netPayable,
       status: newStatus,
-      remarks: `Interim Payment Certificate #${activeIPCNo} generated according to Public Procurement Act (procurement rules)`
+      remarks: `Interim Payment Certificate #${activeIPCNo}: retention ${contract?.retention_percent ?? 0}%, advance recovery ${contract?.advance_recovery_percent ?? 0}%, tax ${taxRate}%`
     };
 
     const existingIdx = ipcBills.findIndex((b) => b.ipc_number === activeIPCNo);
@@ -82,6 +100,8 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
+      {!contract && <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold" data-testid="ipc-no-contract">No contract is set up yet, so retention, advance recovery and discount are 0. Open Contract Setup first.</div>}
+      {advanceNotConfigured && <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold" data-testid="ipc-no-recovery">An advance was given but no advance recovery % is set in Contract Setup, so nothing is being recovered.</div>}
       {/* Header */}
       <div className="bg-blue-900 rounded-2xl p-6 text-white shadow-lg border-2 border-red-600 flex justify-between items-center flex-wrap gap-4">
         <div>
@@ -221,7 +241,7 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
               <tr>
                 <td className="p-3 font-mono">5</td>
                 <td className="p-3 font-bold text-blue-800">Add: Tax (Tax @ rate)</td>
-                <td className="p-3 text-right font-mono text-blue-800">13% on Subtotal</td>
+                <td className="p-3 text-right font-mono text-blue-800">{`Tax (${taxRate}%) on subtotal`}</td>
                 <td className="p-3 text-right font-mono font-bold text-blue-700">
                   + {currencyCode()} {taxAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </td>

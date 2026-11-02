@@ -1,80 +1,46 @@
-importScripts('https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-sw.js');
+// Offline-first service worker. No external scripts (no CDN): everything it needs ships with the app.
+const VERSION = 'uev-v2';
+const SCOPE = self.registration.scope; // e.g. https://host/repo/
+const CORE = ['', 'index.html', 'manifest.json', 'pwa-192.png', 'pwa-512.png'].map((p) => new URL(p, SCOPE).href);
 
-if (workbox) {
-  console.log('[ServiceWorker] Workbox loaded successfully');
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(VERSION).then((c) => Promise.allSettled(CORE.map((u) => c.add(u)))).then(() => self.skipWaiting()));
+});
 
-  workbox.core.setCacheNameDetails({
-    prefix: 'uev-cache',
-    suffix: 'v1',
-    precache: 'app-shell',
-    runtime: 'dynamic-cache'
-  });
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim())
+  );
+});
 
-  // Skip waiting and claim clients immediately
-  self.skipWaiting();
-  workbox.core.clientsClaim();
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin || url.pathname.includes('/api/')) return; // never touch API calls or other sites
 
-  // Cache static assets (JS, CSS, HTML, WASM, Web Fonts)
-  workbox.routing.registerRoute(
-    ({ request }) =>
-      request.destination === 'script' ||
-      request.destination === 'style' ||
-      request.destination === 'document' ||
-      request.destination === 'font' ||
-      request.destination === 'image',
-    new workbox.strategies.StaleWhileRevalidate({
-      cacheName: 'static-assets',
-      plugins: [
-        new workbox.expiration.ExpirationPlugin({
-          maxEntries: 100,
-          maxAgeSeconds: 30 * 24 * 60 * 60 // 30 Days
-        })
-      ]
+  // page navigations: network first, cached app shell when offline
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req).then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); return res; })
+        .catch(() => caches.match(req).then((r) => r || caches.match(new URL('index.html', SCOPE).href)))
+    );
+    return;
+  }
+
+  // content-hashed build files never change: cache first
+  if (url.pathname.includes('/assets/')) {
+    event.respondWith(
+      caches.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; }))
+    );
+    return;
+  }
+
+  // everything else (icons, manifest): stale while revalidate
+  event.respondWith(
+    caches.match(req).then((hit) => {
+      const net = fetch(req).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; }).catch(() => hit);
+      return hit || net;
     })
   );
-
-  // Cache SQL.js WASM binaries & external libraries
-  workbox.routing.registerRoute(
-    ({ url }) => url.origin.includes('cdnjs') || url.pathname.endsWith('.wasm'),
-    new workbox.strategies.CacheFirst({
-      cacheName: 'wasm-and-libs',
-      plugins: [
-        new workbox.cacheableResponse.CacheableResponsePlugin({
-          statuses: [0, 200]
-        }),
-        new workbox.expiration.ExpirationPlugin({
-          maxEntries: 30,
-          maxAgeSeconds: 60 * 24 * 60 * 60 // 60 Days
-        })
-      ]
-    })
-  );
-
-  // Network-First for API requests with Cache Fallback for offline use
-  workbox.routing.registerRoute(
-    ({ url }) => url.pathname.startsWith('/api/'),
-    new workbox.strategies.NetworkFirst({
-      cacheName: 'api-cache',
-      plugins: [
-        new workbox.expiration.ExpirationPlugin({
-          maxEntries: 50,
-          maxAgeSeconds: 7 * 24 * 60 * 60
-        })
-      ]
-    })
-  );
-
-  // Fallback to index.html for navigation routes when offline
-  workbox.routing.registerRoute(
-    ({ request }) => request.mode === 'navigate',
-    async (options) => {
-      try {
-        return await workbox.strategies.NetworkFirst().handle(options);
-      } catch (error) {
-        return caches.match('/index.html') || caches.match('/');
-      }
-    }
-  );
-} else {
-  console.log('[ServiceWorker] Workbox failed to load');
-}
+});

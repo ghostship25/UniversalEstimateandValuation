@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { calcQuantityVal } from '../services/rateEngine';
+import { parseNumericText } from '../services/mbCellValue';
 import {
   LinkTarget,
   PointSession,
@@ -70,6 +71,7 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
 
   const getEvaluatedDisplay = (val: number | string): string => {
     if (typeof val === 'string' && val.trim().startsWith('=')) {
+      if (val.includes('#REF!')) return '#REF!'; // a reference to a deleted row / item (see the warning)
       if (onEvaluateFormula) {
         try {
           const res = onEvaluateFormula(val);
@@ -181,18 +183,20 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
 
   const parseFormulaOrValue = (valStr: string): number | string => {
     const trimmed = valStr.trim();
-    if (!trimmed) return type === 'number' ? 0 : '';
+    // an empty cell stays empty: it is skipped in the quantity (a typed 0 is a real value and multiplies)
+    if (!trimmed) return '';
     if (trimmed.startsWith('=')) {
       // Retain formula string in state so it dynamically updates whenever referenced cells change
       return trimmed;
     }
     // Check if user entered an arithmetic expression like '10*2.5*0.3' or '2+3'
-    if (/[+\-*/]/.test(trimmed) && /[0-9]/.test(trimmed)) {
+    if (/^[\d\s.,+\-*/()]+$/.test(trimmed) && /[+\-*/]/.test(trimmed) && /[0-9]/.test(trimmed)) {
       return '=' + trimmed;
     }
     if (type === 'number') {
-      const num = parseFloat(trimmed);
-      return isNaN(num) ? 0 : num;
+      const num = parseNumericText(trimmed);
+      // text (e.g. "NA") is kept as typed and treated as blank in the quantity
+      return num === null ? trimmed : num;
     }
     return trimmed;
   };

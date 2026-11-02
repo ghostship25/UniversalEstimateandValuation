@@ -60,7 +60,9 @@ import { OfficeLiveSyncModal } from '../../components/OfficeLiveSyncModal';
 
 import { SignatureBlock, CustomTopHeading, HeaderMetadataField } from './CompletionCertificateView';
 import { currencyCode } from '../../services/currency';
-import { PdfTakeoffModal } from '../takeoff/PdfTakeoffModal';
+import { computeRowBaseQuantity } from '../../services/mbDependencyEngine';
+import { evalCellValue } from '../../services/mbCellValue';
+import { TakeoffModal } from '../takeoff/TakeoffModal';
 import type { MBRowSpec } from '../takeoff/takeoffStore';
 
 interface ValuationMBViewProps {
@@ -113,9 +115,9 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
         id: r.id,
         particulars: r.particulars || '',
         no_of_units: r.no_of_units ?? 1,
-        length: r.length ?? 0,
-        breadth: r.breadth ?? 0,
-        height: r.height ?? 0,
+        length: r.length ?? '',
+        breadth: r.breadth ?? '',
+        height: r.height ?? '',
         quantity: r.quantity_this_bill || 0,
         custom_fields: r.custom_fields || {},
         formula: r.formula,
@@ -197,9 +199,9 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
           boq_item_id: item.id,
           particulars: r.particulars || 'Synced Estimate Measurement',
           no_of_units: r.no_of_units ?? 1,
-          length: r.length ?? 0,
-          breadth: r.breadth ?? 0,
-          height: r.height ?? 0,
+          length: r.length ?? '',
+          breadth: r.breadth ?? '',
+          height: r.height ?? '',
           quantity_this_bill: r.quantity || 0,
           formula: r.formula,
           is_heading: r.is_heading,
@@ -719,9 +721,9 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
         boq_item_id: itemId,
         particulars: r.particulars,
         no_of_units: r.no_of_units ?? 1,
-        length: r.length ?? 0,
-        breadth: r.breadth ?? 0,
-        height: r.height ?? 0,
+        length: r.length ?? '',
+        breadth: r.breadth ?? '',
+        height: r.height ?? '',
         quantity_this_bill: typeof r.quantity === 'number' ? r.quantity : 0,
         custom_fields: r.custom_fields ? { ...r.custom_fields } : {},
         formula: r.formula,
@@ -885,9 +887,9 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
             boq_item_id: item.id,
             particulars: r.particulars || 'Synced Estimate Measurement',
             no_of_units: r.no_of_units ?? 1,
-            length: r.length ?? 0,
-            breadth: r.breadth ?? 0,
-            height: r.height ?? 0,
+            length: r.length ?? '',
+            breadth: r.breadth ?? '',
+            height: r.height ?? '',
             quantity_this_bill: r.quantity || 0,
             formula: r.formula,
             is_heading: r.is_heading,
@@ -928,10 +930,10 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
             mb_id: activeBook.id,
             boq_item_id: item.id,
             particulars: `${r.particulars} (As Built)`,
-            no_of_units: typeof r.no_of_units === 'number' ? r.no_of_units : (parseFloat(String(r.no_of_units)) || 1),
-            length: typeof r.length === 'number' ? r.length : (parseFloat(String(r.length)) || 1),
-            breadth: typeof r.breadth === 'number' ? r.breadth : (parseFloat(String(r.breadth)) || 1),
-            height: typeof r.height === 'number' ? r.height : (parseFloat(String(r.height)) || 1),
+            no_of_units: copyCell(r.no_of_units),
+            length: copyCell(r.length),
+            breadth: copyCell(r.breadth),
+            height: copyCell(r.height),
             quantity_this_bill: typeof r.quantity === 'number' ? r.quantity : (parseFloat(String(r.quantity)) || 0),
             formula: r.formula,
             verified_by: activeBook.verified_by,
@@ -957,7 +959,11 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
     const it = project.items.find((i) => i.id === itemId);
     const prec = it?.precision ?? 2;
     const f = Math.pow(10, prec);
-    return Math.round(Number(spec.no_of_units) * Number(spec.length) * Number(spec.breadth) * Number(spec.height) * f) / f;
+    const base = computeRowBaseQuantity(
+      { no: Number(spec.no_of_units), l: Number(spec.length), b: Number(spec.breadth), h: Number(spec.height) },
+      { no: true, l: true, b: true, h: true }
+    );
+    return Math.round(base * f) / f;
   };
   const handleTakeoffApplyRow = (itemId: string, spec: MBRowSpec) => {
     if (!activeBook) return;
@@ -986,6 +992,9 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
         : r
     ));
   };
+
+  /** keep a typed 0 as 0 and a blank as blank when copying estimate rows */
+  const copyCell = (x: any): number | string => (typeof x === 'number' ? x : x === undefined || x === null ? '' : String(x));
 
   const handleAddSubRow = (itemId: string) => {
     const existingValRows = valuationRows.filter((r) => r.mb_id === activeBook.id && r.boq_item_id === itemId);
@@ -1032,10 +1041,10 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
       mb_id: bookId,
       boq_item_id: itemId,
       particulars: existingMbRow?.particulars || 'Site Sub-measurement',
-      no_of_units: typeof existingMbRow?.no_of_units === 'number' ? existingMbRow.no_of_units : (parseFloat(String(existingMbRow?.no_of_units)) || 1),
-      length: typeof existingMbRow?.length === 'number' ? existingMbRow.length : (parseFloat(String(existingMbRow?.length)) || 1),
-      breadth: typeof existingMbRow?.breadth === 'number' ? existingMbRow.breadth : (parseFloat(String(existingMbRow?.breadth)) || 1),
-      height: typeof existingMbRow?.height === 'number' ? existingMbRow.height : (parseFloat(String(existingMbRow?.height)) || 1),
+      no_of_units: existingMbRow ? copyCell(existingMbRow.no_of_units) : 1,
+      length: existingMbRow ? copyCell(existingMbRow.length) : 1,
+      breadth: existingMbRow ? copyCell(existingMbRow.breadth) : 1,
+      height: existingMbRow ? copyCell(existingMbRow.height) : 1,
       quantity_this_bill: typeof existingMbRow?.quantity === 'number' ? existingMbRow.quantity : 1,
       formula: existingMbRow?.formula,
       remarks: existingMbRow?.remarks || '',
@@ -1059,9 +1068,9 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
           id: r.id,
           particulars: r.particulars || '',
           no_of_units: r.no_of_units ?? 1,
-          length: r.length ?? 0,
-          breadth: r.breadth ?? 0,
-          height: r.height ?? 0,
+          length: r.length ?? '',
+          breadth: r.breadth ?? '',
+          height: r.height ?? '',
           quantity: r.quantity_this_bill || 0,
           custom_fields: r.custom_fields || {},
           formula: r.formula,
@@ -1079,19 +1088,8 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
         const itemValRows = currentValRows.filter((row) => row.mb_id === bookId && row.boq_item_id === r.boq_item_id);
         const rIdx = itemValRows.findIndex((row) => row.id === r.id);
 
-        const evalVal = (val: any): number => {
-          if (val === undefined || val === null || val === '') return 0;
-          if (typeof val === 'number') return isNaN(val) ? 0 : val;
-          if (typeof val === 'string') {
-            const trimmed = val.trim();
-            if (trimmed.startsWith('=')) {
-              return evaluateMBFormula(trimmed, itemValRows as any[], rIdx, enrichedItems);
-            }
-            const parsed = parseFloat(trimmed);
-            return isNaN(parsed) ? 0 : parsed;
-          }
-          return 0;
-        };
+        const evalVal = (val: any): number | null =>
+          evalCellValue(val, (f) => evaluateMBFormula(f, itemValRows as any[], rIdx, enrichedItems));
 
         const no = evalVal(r.no_of_units);
         const l = evalVal(r.length);
@@ -1106,18 +1104,7 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
         const useB = includedCols.includes('breadth');
         const useH = includedCols.includes('height');
 
-        let activeFactors: number[] = [];
-        if (useNo) activeFactors.push(no);
-        if (useL && l !== 0) activeFactors.push(l);
-        if (useB && b !== 0) activeFactors.push(b);
-        if (useH && h !== 0) activeFactors.push(h);
-
-        let computedQty = 1;
-        if (activeFactors.length === 0) {
-          computedQty = useNo ? no : 0;
-        } else {
-          computedQty = activeFactors.reduce((acc, v) => acc * v, 1);
-        }
+        let computedQty = computeRowBaseQuantity({ no, l, b, h }, { no: useNo, l: useL, b: useB, h: useH });
 
         if (targetItem && targetItem.custom_column_names && targetItem.custom_column_config) {
           targetItem.custom_column_names.forEach((colName) => {
@@ -2116,7 +2103,7 @@ Net Authority Amount Payable:
 
   return (
     <div className="space-y-6 pb-24">
-      <PdfTakeoffModal
+      <TakeoffModal
         isOpen={takeoffOpen}
         onClose={() => setTakeoffOpen(false)}
         mode="valuation"

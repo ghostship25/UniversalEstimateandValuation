@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Download, Terminal, RefreshCw, Layers, CheckCircle2, Copy, FileText, X } from 'lucide-react';
+import { Database, Download, Terminal, RefreshCw, Layers, CheckCircle2, Copy, FileText, X, Upload, ShieldCheck } from 'lucide-react';
+import { collectBackup, downloadBackup, restoreBackup, validateBackup, FullBackup } from '../services/fullBackup';
+import { markBackupDone, lastBackupAt } from '../services/saveStatus';
 import { ProjectEstimate } from '../types';
 import {
   executeRawSQL,
@@ -15,13 +17,59 @@ interface DatabaseModalProps {
 }
 
 export const DatabaseModal: React.FC<DatabaseModalProps> = ({ isOpen, onClose, project }) => {
-  const [activeTab, setActiveTab] = useState<'tables' | 'query' | 'postgresql'>('tables');
+  const [activeTab, setActiveTab] = useState<'backup' | 'tables' | 'query' | 'postgresql'>('backup');
   const [sqlInput, setSqlInput] = useState<string>('SELECT * FROM boq_items LIMIT 10;');
   const [queryResult, setQueryResult] = useState<{ columns: string[]; values: any[][] } | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [tableStats, setTableStats] = useState<{ name: string; count: number }[]>([]);
   const [copiedPgSql, setCopiedPgSql] = useState<boolean>(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<FullBackup | null>(null);
+  const lastBk = lastBackupAt();
+
+  // Escape closes the window (not while typing in a field)
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (e.key === 'Escape' && tag !== 'INPUT' && tag !== 'TEXTAREA') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
+  const doFullBackup = async () => {
+    setBackupBusy(true); setBackupMsg(null);
+    try {
+      const b = await collectBackup();
+      downloadBackup(b);
+      markBackupDone();
+      setBackupMsg({ ok: true, text: `Backup downloaded: ${b.summary.projects} project(s), ${b.summary.items} item(s), ${b.summary.takeoff_sheets} drawing(s). Keep the file somewhere safe (cloud drive or another computer).` });
+    } catch (e: any) { setBackupMsg({ ok: false, text: `Backup failed: ${e?.message || e}` }); }
+    setBackupBusy(false);
+  };
+  const onPickRestore = async (file: File | undefined) => {
+    if (!file) return;
+    setBackupMsg(null); setPendingRestore(null);
+    try {
+      const v = validateBackup(JSON.parse(await file.text()));
+      if (v.ok === false) { setBackupMsg({ ok: false, text: v.error }); return; }
+      setPendingRestore(v.backup);
+    } catch { setBackupMsg({ ok: false, text: 'This file could not be read as a backup.' }); }
+  };
+  const confirmRestore = async () => {
+    if (!pendingRestore) return;
+    setBackupBusy(true);
+    try {
+      // safety copy of what is here now, so a wrong restore can be undone
+      downloadBackup(await collectBackup(), 'uev_before_restore');
+      await restoreBackup(pendingRestore);
+      setBackupMsg({ ok: true, text: 'Restored. Reloading…' });
+      window.setTimeout(() => window.location.reload(), 600);
+    } catch (e: any) { setBackupMsg({ ok: false, text: `Restore failed: ${e?.message || e}` }); setBackupBusy(false); }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -129,6 +177,18 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({ isOpen, onClose, p
         {/* Navigation Tabs */}
         <div className="flex items-center gap-1 px-4 bg-slate-950 border-b border-slate-800 text-xs font-medium">
           <button
+            onClick={() => setActiveTab('backup')}
+            data-testid="tab-backup"
+            className={`px-4 py-3 border-b-2 flex items-center gap-2 transition ${
+              activeTab === 'backup'
+                ? 'border-indigo-500 text-indigo-400 font-bold bg-slate-900/60'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Full Backup &amp; Restore
+          </button>
+          <button
             onClick={() => setActiveTab('tables')}
             className={`px-4 py-3 border-b-2 flex items-center gap-2 transition ${
               activeTab === 'tables'
@@ -165,6 +225,37 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({ isOpen, onClose, p
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {activeTab === 'backup' && (
+            <div className="space-y-4 text-slate-200" data-testid="backup-tab">
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700 text-sm space-y-2">
+                <div className="font-bold text-indigo-300">Your data is stored in this browser.</div>
+                <p className="text-slate-300 text-xs leading-relaxed">Clearing the browser's site data, a different browser or a new computer starts empty. A full backup saves everything in one file: all projects, rate tables and zones, MB and valuation rows, contract, bills, variations, settings and the takeoff drawings.</p>
+                <div className="text-xs text-slate-400">Last full backup: <b className="text-slate-200">{lastBk ? new Date(lastBk).toLocaleString() : 'never'}</b></div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button data-testid="backup-download" disabled={backupBusy} onClick={doFullBackup} className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold disabled:opacity-50">
+                  <Download className="w-4 h-4" /> Download full backup
+                </button>
+                <label className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-600 text-slate-200 text-sm font-bold cursor-pointer hover:bg-slate-800">
+                  <Upload className="w-4 h-4" /> Restore from a backup file
+                  <input data-testid="backup-file" type="file" accept=".json,.uevbackup.json,application/json" className="hidden" onChange={(e) => { onPickRestore(e.target.files?.[0]); e.target.value = ''; }} />
+                </label>
+              </div>
+              {pendingRestore && (
+                <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-700 text-xs space-y-2" data-testid="restore-confirm">
+                  <div className="font-bold text-amber-300">Restore this backup?</div>
+                  <div>Made {new Date(pendingRestore.created_at).toLocaleString()}: <b>{pendingRestore.summary.projects}</b> project(s), <b>{pendingRestore.summary.items}</b> item(s), <b>{pendingRestore.summary.takeoff_sheets}</b> drawing(s).</div>
+                  <div className="text-amber-200">This replaces ALL data currently in the app. A safety copy of the current data is downloaded first, so you can undo this.</div>
+                  <div className="flex gap-2">
+                    <button data-testid="restore-go" disabled={backupBusy} onClick={confirmRestore} className="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-bold disabled:opacity-50">Yes, restore</button>
+                    <button onClick={() => setPendingRestore(null)} className="px-3 py-1.5 rounded-lg border border-slate-600">Cancel</button>
+                  </div>
+                </div>
+              )}
+              {backupMsg && <div data-testid="backup-msg" className={`p-3 rounded-lg text-xs border ${backupMsg.ok ? 'bg-emerald-950/40 border-emerald-700 text-emerald-200' : 'bg-red-950/40 border-red-700 text-red-200'}`}>{backupMsg.text}</div>}
+            </div>
+          )}
+
           {activeTab === 'tables' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

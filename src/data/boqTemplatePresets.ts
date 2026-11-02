@@ -43,7 +43,7 @@ export const BOQ_PRINT_PRESETS: BOQPrintTemplatePreset[] = [
     defaultProjectName: 'Construction of Multi-Purpose Authority Community Center Building',
     defaultLocation: 'Ward No. 04, Central Town',
     contingencyPercent: 3,
-    taxPercent: 13,
+    taxPercent: 10,
     chapters: [
       {
         id: 'ch_1',
@@ -287,7 +287,7 @@ export const BOQ_PRINT_PRESETS: BOQPrintTemplatePreset[] = [
     defaultProjectName: 'Upgrading and Asphalting of Authority Connector Road',
     defaultLocation: 'Chainage 0+000 to 1+250, Ward No. 07',
     contingencyPercent: 3,
-    taxPercent: 13,
+    taxPercent: 10,
     chapters: [
       {
         id: 'dor_ch_1',

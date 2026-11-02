@@ -2,7 +2,17 @@
 // Sheets (the PDF bytes + calibration + measurements) are kept in IndexedDB so large drawings do not
 // bloat the project JSON / localStorage.
 
-export type TakeoffToolType = 'length' | 'area' | 'count';
+export type TakeoffToolType = 'length' | 'area' | 'count' | 'angle';
+
+/** how a measurement is drawn: this decides which quantities (length, area, perimeter, side dimensions) it yields */
+export type Shape =
+  | 'line' | 'polyline' | 'arc' | 'curve'            // length family
+  | 'rect' | 'rrect' | 'polygon' | 'circle' | 'ellipse' | 'freehand' // area family
+  | 'count' | 'angle' | 'cad';
+
+/** how an area measurement is written into the MB columns */
+export type SendAs = 'value' | 'perimeter' | 'LxB' | 'BxL' | 'LxH';
+export interface Pitch { mode: 'ratio' | 'deg'; value: number }
 export interface Pt { x: number; y: number }
 
 export interface TakeoffLink { itemId: string; rowId: string }
@@ -11,23 +21,44 @@ export interface TakeoffMeasurement {
   id: string;
   page: number;
   type: TakeoffToolType;
+  shape?: Shape;           // older saved measurements have no shape; see shapeOf()
   label: string;
   points: Pt[];            // page units (PDF points at scale 1, or image pixels)
   deduct: boolean;         // sent to the MB as a negative quantity
   itemId?: string;         // target BOQ item
-  b?: number;              // optional breadth (length measurements)
-  h?: number;              // optional height / depth / thickness
+  b?: number;              // optional breadth / width factor
+  h?: number;              // optional height / depth / thickness factor
+  sendAs?: SendAs;         // area shapes: value | perimeter | L x B | B x L | L x H
+  pitch?: Pitch;           // slope: multiplies a plan length / area by the true-length factor
+  waste?: number;          // % allowance added to the quantity
+  note?: string;
   links: TakeoffLink[];    // MB rows created from this measurement
+  /** CAD-derived measurements: raw length (units) / area (units²) / count, so rescaling stays exact */
+  raw?: number;
+  entityIds?: number[];    // CAD entities this measurement was built from (highlighted when selected)
+  layer?: string;
+  blockName?: string;
+}
+
+export type ScaleMethod = 'two-point' | 'preset' | 'units' | 'file';
+export interface ScaleInfo {
+  method: ScaleMethod;
+  label: string;           // human readable, e.g. "1:100" or "10 m = 100.0 units"
+  ref?: { a: Pt; b: Pt; text: string }; // the calibration line, drawn on the sheet as a check
 }
 
 export interface TakeoffSheet {
   id: string;
   projectKey: string;
   name: string;
-  kind: 'pdf' | 'image';
+  kind: 'pdf' | 'image' | 'dxf';
   data: ArrayBuffer;
   /** metres per page unit, per page number (set by calibration) */
   pageScales: Record<number, number>;
+  /** item layers (evidence): colour + visibility per BOQ item id ('_none' = unassigned) */
+  layers?: Record<string, { color: string; visible: boolean }>;
+  /** how each page's scale was set (shown to the user so it is always clear what is applied) */
+  scaleInfo?: Record<number, ScaleInfo>;
   outUnit: 'm' | 'ft';
   measurements: TakeoffMeasurement[];
   updatedAt: number;
@@ -62,6 +93,33 @@ export async function listSheets(projectKey: string): Promise<TakeoffSheet[]> {
   } catch {
     return [];
   }
+}
+
+/** every sheet of every project (used by full backup) */
+export async function listAllSheets(): Promise<TakeoffSheet[]> {
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(STORE).objectStore(STORE).getAll();
+      req.onsuccess = () => resolve(req.result as TakeoffSheet[]);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** replace all stored sheets with the given ones, keeping their timestamps (used by restore) */
+export async function replaceAllSheets(sheets: TakeoffSheet[]): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const os = tx.objectStore(STORE);
+    os.clear();
+    sheets.forEach((s) => os.put(s));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 export async function saveSheet(sheet: TakeoffSheet): Promise<void> {
@@ -122,8 +180,13 @@ const M_TO_FT = 1 / 0.3048;
 
 /** value in output units (m / m2 or ft / ft2) or null when the page is not calibrated */
 export function measurementValue(m: TakeoffMeasurement, mpp: number | undefined, out: 'm' | 'ft'): number | null {
-  if (m.type === 'count') return m.points.length;
+  if (m.type === 'count') return m.raw !== undefined ? m.raw : m.points.length;
   if (!mpp) return null;
+  if (m.raw !== undefined) {
+    return m.type === 'length'
+      ? m.raw * mpp * (out === 'ft' ? M_TO_FT : 1)
+      : m.raw * mpp * mpp * (out === 'ft' ? M_TO_FT * M_TO_FT : 1);
+  }
   if (m.type === 'length') return polylineLength(m.points) * mpp * (out === 'ft' ? M_TO_FT : 1);
   return polygonArea(m.points) * mpp * mpp * (out === 'ft' ? M_TO_FT * M_TO_FT : 1);
 }
@@ -137,25 +200,4 @@ export interface MBRowSpec {
   height: number;
   remarks: string;
   takeoff_id: string;
-}
-
-const r3 = (n: number) => Math.round(n * 1000) / 1000;
-
-/** Convert a measurement into the N x L x B x H columns of a Measurement Book row. */
-export function toRowSpec(m: TakeoffMeasurement, value: number, sheetName: string, rowId: string): MBRowSpec {
-  const sign = m.deduct ? -1 : 1;
-  let n = 1, l = 1, b = 1, h = 1;
-  if (m.type === 'count') { n = value; b = m.b ?? 1; h = m.h ?? 1; }
-  else if (m.type === 'length') { l = r3(value); b = m.b ?? 1; h = m.h ?? 1; }
-  else { l = r3(value); h = m.h ?? 1; }
-  return {
-    id: rowId,
-    particulars: `${m.deduct ? 'Deduct: ' : ''}${m.label}`,
-    no_of_units: sign * n,
-    length: l,
-    breadth: b,
-    height: h,
-    remarks: `Takeoff: ${sheetName} p.${m.page}`,
-    takeoff_id: m.id,
-  };
 }

@@ -1300,7 +1300,7 @@ export const VisualGeometryMBEditor: React.FC<VisualGeometryMBEditorProps> = ({
         } else {
           // Create new BOQ item for this work item
           const newItemId = `item_geom_${Date.now()}_${idx}`;
-          const effectiveRate = out.estimated_rate || 1200;
+          const effectiveRate = out.estimated_rate ?? 0;
           updatedItems.push({
             id: newItemId,
             item_id: Date.now() + idx,

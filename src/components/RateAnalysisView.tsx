@@ -27,6 +27,7 @@ import { getDefaultResourceRate } from '../data/initialData';
 import { downloadPrintableHTML } from '../services/printExport';
 import { PrintRateAnalysisModal } from './PrintRateAnalysisModal';
 import { currencyCode } from '../services/currency';
+import { defaultTaxPercent } from '../services/taxDefaults';
 
 /**
  * Validation function in RateAnalysisView that logs and evaluates whether resource rates
@@ -264,8 +265,8 @@ export const RateAnalysisView: React.FC<RateAnalysisViewProps> = ({
             fiscalYear: selectedFY,
             mode: calcMode,
             contractorOverheadPercent: overheadPercent,
-            materialTaxPercent: 13,
-            taxPercent: 13,
+            materialTaxPercent: defaultTaxPercent(),
+            taxPercent: defaultTaxPercent(),
             leadKm,
             royaltyPerCum
           });
@@ -322,8 +323,8 @@ export const RateAnalysisView: React.FC<RateAnalysisViewProps> = ({
       fiscalYear: selectedFY,
       mode: calcMode,
       contractorOverheadPercent: overheadPercent,
-      materialTaxPercent: 13,
-      taxPercent: 13,
+      materialTaxPercent: defaultTaxPercent(),
+      taxPercent: defaultTaxPercent(),
       leadKm,
       royaltyPerCum
     });
@@ -516,8 +517,8 @@ export const RateAnalysisView: React.FC<RateAnalysisViewProps> = ({
         fiscalYear: selectedFY,
         mode: calcMode,
         contractorOverheadPercent: overheadPercent,
-        materialTaxPercent: 13,
-        taxPercent: 13,
+        materialTaxPercent: defaultTaxPercent(),
+        taxPercent: defaultTaxPercent(),
         leadKm,
         royaltyPerCum
       });
@@ -912,8 +913,8 @@ export const RateAnalysisView: React.FC<RateAnalysisViewProps> = ({
                         fiscalYear: selectedFY,
                         mode: calcMode,
                         contractorOverheadPercent: overheadPercent,
-                        materialTaxPercent: 13,
-                        taxPercent: 13,
+                        materialTaxPercent: defaultTaxPercent(),
+                        taxPercent: defaultTaxPercent(),
                         leadKm,
                         royaltyPerCum
                       });
@@ -982,8 +983,8 @@ export const RateAnalysisView: React.FC<RateAnalysisViewProps> = ({
                           fiscalYear: selectedFY,
                           mode: calcMode,
                           contractorOverheadPercent: overheadPercent,
-                          materialTaxPercent: 13,
-                          taxPercent: 13,
+                          materialTaxPercent: defaultTaxPercent(),
+                          taxPercent: defaultTaxPercent(),
                           leadKm,
                           royaltyPerCum
                         });
@@ -1047,8 +1048,8 @@ export const RateAnalysisView: React.FC<RateAnalysisViewProps> = ({
                               fiscalYear: selectedFY,
                               mode: calcMode,
                               contractorOverheadPercent: overheadPercent,
-                              materialTaxPercent: 13,
-                              taxPercent: 13,
+                              materialTaxPercent: defaultTaxPercent(),
+                              taxPercent: defaultTaxPercent(),
                               leadKm,
                               royaltyPerCum
                             });

@@ -69,7 +69,8 @@ import {
   Camera
 } from 'lucide-react';
 import { Sidebar } from './Sidebar';
-import { ZoneInfo, ProjectEstimate } from '../../types';
+import { ZoneInfo, ProjectEstimate, Contract } from '../../types';
+import { SaveStatus } from './SaveStatus';
 import { DisplayMBFormatModal } from '../DisplayMBFormatModal';
 import {
   AppFormatConfig,
@@ -90,6 +91,7 @@ import {
 import { currencyCode } from '../../services/currency';
 
 interface AppShellProps {
+  contract?: Contract | null;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   zones: ZoneInfo[];
@@ -124,6 +126,7 @@ interface AppShellProps {
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
+  contract,
   activeTab,
   setActiveTab,
   zones,
@@ -169,7 +172,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
     if (activeTab === 'template-drawings' || activeTab === 'template-editor' || activeTab === 'templates') return 'boq';
     if (activeTab === 'bar-bending' || activeTab === 'bbs') return 'bar-bending-schedule';
-    if (activeTab === 'contract-agreement' || activeTab === 'completion-certificate' || activeTab === 'ipc-bill' || activeTab === 'valuation-abstract') return 'valuation-mb';
+    if (activeTab === 'contract-agreement' || activeTab === 'completion-certificate' || activeTab === 'ipc-bill' || activeTab === 'variation-order' || activeTab === 'contract-setup' || activeTab === 'valuation-abstract') return 'valuation-mb';
     if (activeTab === 'resource-master' || activeTab === 'fiscal-year' || activeTab === 'organization') return 'zone-rates';
     return 'boq';
   });
@@ -182,7 +185,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       setActiveRibbonTopic('boq');
     } else if (activeTab === 'bar-bending' || activeTab === 'bbs') {
       setActiveRibbonTopic('bar-bending-schedule');
-    } else if (activeTab === 'contract-agreement' || activeTab === 'completion-certificate' || activeTab === 'ipc-bill' || activeTab === 'valuation-abstract') {
+    } else if (activeTab === 'contract-agreement' || activeTab === 'completion-certificate' || activeTab === 'ipc-bill' || activeTab === 'variation-order' || activeTab === 'contract-setup' || activeTab === 'valuation-abstract') {
       setActiveRibbonTopic('valuation-mb');
     } else if (activeTab === 'resource-master' || activeTab === 'fiscal-year' || activeTab === 'organization') {
       setActiveRibbonTopic('zone-rates');
@@ -269,7 +272,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     } else if (activeTab === 'resource-breakdown' || activeRibbonTopic === 'resource-breakdown') {
       dispatchToolAction('uev:resource-export');
       localToast('Exporting Resource Quantities to print preview...');
-    } else if (['valuation-mb', 'ipc-bill', 'contract-agreement', 'completion-certificate'].includes(activeTab) || activeRibbonTopic === 'valuation-mb') {
+    } else if (['valuation-mb', 'ipc-bill', 'variation-order', 'contract-setup', 'contract-agreement', 'completion-certificate'].includes(activeTab) || activeRibbonTopic === 'valuation-mb') {
       dispatchToolAction('uev:valuation-print');
       localToast('Opening Valuation & Bill PDF print preview...');
     } else if (activeTab === 'bar-bending-schedule' || activeTab === 'bar-bending' || activeTab === 'bbs') {
@@ -382,6 +385,9 @@ export const AppShell: React.FC<AppShellProps> = ({
       case 'valuation-mb': return 'POST-CONTRACT VALUATION MB';
       case 'valuation-abstract': return 'RUNNING BILL VALUATION ABSTRACT';
       case 'contract-agreement': return 'CONTRACT AGREEMENT & CONTRACTOR BOQ';
+      case 'contract-setup': return 'CONTRACT SETUP (RETENTION, ADVANCE, DISCOUNT)';
+      case 'variation-order': return 'VARIATION ORDERS';
+      case 'ipc-bill': return 'INTERIM PAYMENT CERTIFICATE (RUNNING BILL)';
       case 'completion-certificate': return 'COMPLETION CERTIFICATE';
       case 'reports': return 'EXECUTIVE ENGINEERING REPORTS';
       case 'user-manual': return 'USER GUIDE & SPECIFICATIONS MANUAL';
@@ -515,10 +521,7 @@ export const AppShell: React.FC<AppShellProps> = ({
             </span>
           </div>
 
-          <div className="hidden sm:flex items-center space-x-1.5 border-l border-slate-700 pl-3">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-slate-300 text-[10px] font-mono">Live Sync</span>
-          </div>
+          <SaveStatus hasData={(project?.items?.length || 0) > 0} onOpenBackup={onOpenDatabaseModal} />
         </div>
       </header>
 
@@ -647,7 +650,7 @@ export const AppShell: React.FC<AppShellProps> = ({
               )) ||
               (tab.id === 'dashboard' && activeTab === 'dashboard') ||
               (tab.id === 'norms-library' && (activeTab === 'norms-library' || activeTab === 'zone-rates' || activeRibbonTopic === 'norms-library')) ||
-              (tab.id === 'valuation-mb' && (activeTab === 'valuation-mb' || activeTab === 'contract-agreement' || activeTab === 'completion-certificate' || activeTab === 'ipc-bill' || activeRibbonTopic === 'valuation-mb')) ||
+              (tab.id === 'valuation-mb' && (activeTab === 'valuation-mb' || activeTab === 'contract-agreement' || activeTab === 'completion-certificate' || activeTab === 'ipc-bill' || activeTab === 'variation-order' || activeTab === 'contract-setup' || activeRibbonTopic === 'valuation-mb')) ||
               (tab.id === 'bar-bending-schedule' && (activeTab === 'bar-bending-schedule' || activeTab === 'bar-bending' || activeTab === 'bbs' || activeRibbonTopic === 'tools')) ||
               (tab.id === 'layout' && activeRibbonTopic === 'layout') ||
               (tab.id === 'view' && activeRibbonTopic === 'view') ||
@@ -1140,10 +1143,10 @@ export const AppShell: React.FC<AppShellProps> = ({
                 <button
                   onClick={() => dispatchToolAction('uev:mb-open-takeoff')}
                   className="flex flex-col items-center justify-center p-1 rounded hover:bg-white hover:border-slate-300 border border-transparent transition cursor-pointer text-slate-700 hover:text-slate-900 group"
-                  title="PDF / Drawing Takeoff: measure lengths, areas and counts on a drawing and send them to the MB"
+                  title="PDF / CAD Takeoff: measure lengths, areas and counts on a PDF, DXF or image and send them to the MB"
                 >
                   <Ruler className="w-4 h-4 text-emerald-600 mb-0.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] font-semibold leading-tight text-center">PDF<br />Takeoff</span>
+                  <span className="text-[10px] font-semibold leading-tight text-center">PDF / CAD<br />Takeoff</span>
                 </button>
                 <button
                   onClick={() => dispatchToolAction('uev:mb-link-guide')}
@@ -1460,7 +1463,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 <div className="flex items-center space-x-2 text-[10px] text-slate-600 px-1 font-mono">
                   <span>Overhead: <strong className="text-emerald-700">15.0% (Contractor)</strong></span>
                   <span>•</span>
-                  <span>Tax on Mat: <strong className="text-slate-800">13% Built-in</strong></span>
+                  <span>Tax on Mat: <strong className="text-slate-800">{`${project?.tax_percent ?? 0}%`} Built-in</strong></span>
                 </div>
               </div>
               <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider text-center mt-1 pb-0.5 select-none">
@@ -1792,10 +1795,34 @@ export const AppShell: React.FC<AppShellProps> = ({
                 <button
                   onClick={() => dispatchToolAction('uev:vmb-open-takeoff')}
                   className="flex flex-col items-center justify-center p-1 rounded hover:bg-white hover:border-slate-300 border border-transparent transition cursor-pointer text-slate-700 hover:text-slate-900 group"
-                  title="PDF / Drawing Takeoff: measure lengths, areas and counts on a drawing and send them to the MB"
+                  title="PDF / CAD Takeoff: measure lengths, areas and counts on a PDF, DXF or image and send them to the MB"
                 >
                   <Ruler className="w-4 h-4 text-emerald-600 mb-0.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] font-semibold leading-tight text-center">PDF<br />Takeoff</span>
+                  <span className="text-[10px] font-semibold leading-tight text-center">PDF / CAD<br />Takeoff</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('contract-setup')}
+                  className="flex flex-col items-center justify-center p-1 rounded hover:bg-white hover:border-slate-300 border border-transparent transition cursor-pointer text-slate-700 hover:text-slate-900 group"
+                  title="Contract setup: retention, advance, tender discount"
+                >
+                  <Ruler className="w-4 h-4 text-indigo-600 mb-0.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] font-semibold leading-tight text-center">Contract<br />Setup</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('ipc-bill')}
+                  className="flex flex-col items-center justify-center p-1 rounded hover:bg-white hover:border-slate-300 border border-transparent transition cursor-pointer text-slate-700 hover:text-slate-900 group"
+                  title="Interim Payment Certificates: gross, retention, advance recovery, tax and net payable"
+                >
+                  <Ruler className="w-4 h-4 text-emerald-600 mb-0.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] font-semibold leading-tight text-center">IPC<br />Certificates</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('variation-order')}
+                  className="flex flex-col items-center justify-center p-1 rounded hover:bg-white hover:border-slate-300 border border-transparent transition cursor-pointer text-slate-700 hover:text-slate-900 group"
+                  title="Variation orders: quantity changes and extra items"
+                >
+                  <Ruler className="w-4 h-4 text-indigo-600 mb-0.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] font-semibold leading-tight text-center">Variation<br />Orders</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('contract-agreement')}
@@ -1815,14 +1842,14 @@ export const AppShell: React.FC<AppShellProps> = ({
             <div className="flex flex-col justify-between px-2.5 py-0.5 border-r border-slate-200 shrink-0">
               <div className="flex flex-col justify-center space-y-1">
                 <div className="flex items-center space-x-2 text-[10.5px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-mono">
-                  <span>Retention: <strong>5.0%</strong></span>
+                  <span>Retention: <strong>{contract ? `${contract.retention_percent ?? 0}%` : 'not set'}</strong></span>
                   <span className="text-slate-400">•</span>
-                  <span>Mob. Recovery: <strong>Auto</strong></span>
+                  <span>Advance: <strong>{contract && contract.advance_given > 0 ? contract.advance_given.toLocaleString('en-US') : contract ? 'none' : 'not set'}</strong></span>
                 </div>
                 <div className="flex items-center space-x-2 text-[10px] text-slate-600 px-1 font-mono">
-                  <span>Tax: <strong>Per project</strong></span>
+                  <span>Tax: <strong>{project?.tax_percent ?? 0}%</strong></span>
                   <span>•</span>
-                  <span>Security Dep: <strong>Held</strong></span>
+                  <span>Discount: <strong>{contract ? `${contract.tender_discount_percent ?? 0}%` : 'not set'}</strong></span>
                 </div>
               </div>
               <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider text-center mt-1 pb-0.5 select-none">

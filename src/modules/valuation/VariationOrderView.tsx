@@ -38,8 +38,8 @@ export const VariationOrderView: React.FC<VariationOrderViewProps> = ({
     e.preventDefault();
 
     const isExtra = variationType === 'EXTRA_ITEM';
-    const origQty = isExtra ? 0 : (currentItem?.estimated_quantity || 100);
-    const rate = isExtra ? extraRate : (currentItem?.calculated_unit_rate || 5000);
+    const origQty = isExtra ? 0 : (currentItem?.estimated_quantity ?? 0);
+    const rate = isExtra ? extraRate : (currentItem?.calculated_unit_rate ?? 0);
     const revQty = isExtra ? revisedQty : revisedQty;
     const impact = (revQty - origQty) * rate;
 

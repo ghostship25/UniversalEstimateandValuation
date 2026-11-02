@@ -36,11 +36,12 @@ export const ContractSetupView: React.FC<ContractSetupViewProps> = ({
     contractor_pan: contract?.contractor_pan || '301294857',
     awarded_amount: contract?.awarded_amount || Math.round(engineerEstimateTotal * 0.88 * 100) / 100, // 12% below estimate by default
     engineer_estimate_amount: engineerEstimateTotal,
-    tender_discount_percent: contract?.tender_discount_percent || 12.0,
+    tender_discount_percent: contract?.tender_discount_percent ?? 0,
     start_date_iso: contract?.start_date_iso || '2026-04-15',
     completion_date_iso: contract?.completion_date_iso || '2027-03-30',
-    retention_percent: contract?.retention_percent || 5.0,
-    advance_given: contract?.advance_given || 500000,
+    retention_percent: contract?.retention_percent ?? 0,
+    advance_given: contract?.advance_given ?? 0,
+    advance_recovery_percent: contract?.advance_recovery_percent ?? 0,
     status: contract?.status || 'ACTIVE'
   });
 
@@ -60,8 +61,9 @@ export const ContractSetupView: React.FC<ContractSetupViewProps> = ({
       tender_discount_percent: Number(formState.tender_discount_percent) || 0,
       start_date_iso: formState.start_date_iso || '2026-04-01',
       completion_date_iso: formState.completion_date_iso || '2027-03-30',
-      retention_percent: Number(formState.retention_percent) || 5.0,
+      retention_percent: Number(formState.retention_percent) || 0,
       advance_given: Number(formState.advance_given) || 0,
+      advance_recovery_percent: Number(formState.advance_recovery_percent) || 0,
       status: (formState.status as Contract['status']) || 'ACTIVE'
     };
 
@@ -256,6 +258,17 @@ export const ContractSetupView: React.FC<ContractSetupViewProps> = ({
                   value={formState.advance_given}
                   onChange={(e) => setFormState({ ...formState, advance_given: parseFloat(e.target.value) })}
                   className="w-full p-2.5 border rounded-xl font-mono text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Advance recovery (% of each bill)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={formState.advance_recovery_percent}
+                  onChange={(e) => setFormState({ ...formState, advance_recovery_percent: parseFloat(e.target.value) })}
+                  placeholder="e.g. 10 (empty or 0 = no recovery)"
+                  className="w-full p-2.5 border rounded-xl font-medium bg-slate-50 focus:bg-white"
                 />
               </div>
             </div>

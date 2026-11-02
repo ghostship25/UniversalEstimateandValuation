@@ -1645,7 +1645,7 @@ export const TemplateEditorView: React.FC<TemplateEditorViewProps> = ({
         if (norm) {
           estimatedRate = norm.resources.reduce((sum, res) => {
             const masterRes = resources.find(r => r.resource_id === res.resource_id);
-            const rate = masterRes?.zone_rates?.[selectedZone?.id || ''] || masterRes?.default_rate || 550;
+            const rate = masterRes?.zone_rates?.[selectedZone?.id || ''] || masterRes?.default_rate || 0;
             return sum + (res.quantity_per_base_unit * rate);
           }, 0);
           estimatedRate = estimatedRate * 1.15; // Contractor OH & profit

@@ -1648,7 +1648,7 @@ Actual User Contrib.:
               </div>
 
               <div className="flex justify-between text-slate-600">
-                <span>Tax ({rateMode === 'user' ? '0%' : '13%'} on Civil Works):</span>
+                <span>Tax ({rateMode === 'user' ? '0%' : `${project.tax_percent ?? 0}%`} on Civil Works):</span>
                 <span className="font-bold text-slate-900">
                   {rateMode === 'user'
                     ? `${currencyCode()} 0.00 (Incl. in Materials)`

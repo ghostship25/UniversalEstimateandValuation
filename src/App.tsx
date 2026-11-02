@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { AppShell } from './components/layout/AppShell';
 import { WelcomeScreen } from './components/WelcomeScreen';
 
@@ -26,6 +26,10 @@ import { CompletionCertificateView } from './modules/valuation/CompletionCertifi
 import { ContractSetupView } from './modules/valuation/ContractSetupView';
 import { ContractAgreementView } from './modules/valuation/ContractAgreementView';
 import { IPCBillView } from './modules/valuation/IPCBillView';
+import { setCurrentTaxPercent } from './services/taxDefaults';
+import { safeSave } from './services/saveStatus';
+import { remapEstimateItems, remapValuationRows, remapValuationItemOrder } from './services/refRemap';
+import { VariationOrderView } from './modules/valuation/VariationOrderView';
 
 // Reports & Admin
 import { ExecutiveReportsView } from './modules/reports/ExecutiveReportsView';
@@ -58,8 +62,7 @@ import {
   ValuationMBBook,
   ValuationMBRow,
   IPCBill,
-  CompletionCertificate
-} from './types';
+  CompletionCertificate, VariationOrder } from './types';
 
 import { INITIAL_ZONES, FISCAL_YEARS, INITIAL_RESOURCES } from './data/initialData';
 import { STANDARD_TEMPLATES } from './data/standardTemplates';
@@ -108,7 +111,7 @@ const DEFAULT_PROJECTS: ProjectEstimate[] = [
     zone: INITIAL_ZONES[0].name_en,
     fiscal_year: FISCAL_YEARS[0],
     contractor_overhead_percent: 15,
-    tax_percent: 13,
+    tax_percent: 10,
     lead_distance_km: 0,
     items: [],
     created_at: new Date().toISOString(),
@@ -121,7 +124,7 @@ const DEFAULT_PROJECTS: ProjectEstimate[] = [
     zone: INITIAL_ZONES[0].name_en,
     fiscal_year: FISCAL_YEARS[0],
     contractor_overhead_percent: 15,
-    tax_percent: 13,
+    tax_percent: 10,
     lead_distance_km: 0,
     items: [],
     created_at: new Date().toISOString(),
@@ -134,7 +137,7 @@ const DEFAULT_PROJECTS: ProjectEstimate[] = [
     zone: INITIAL_ZONES[1]?.name_en || 'Sample City',
     fiscal_year: FISCAL_YEARS[0],
     contractor_overhead_percent: 15,
-    tax_percent: 13,
+    tax_percent: 10,
     lead_distance_km: 0,
     items: [],
     created_at: new Date().toISOString(),
@@ -403,6 +406,14 @@ export default function App() {
     return [];
   });
 
+  const [variations, setVariations] = useState<VariationOrder[]>(() => {
+    try {
+      const saved = localStorage.getItem('uev_variations_v1');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
   const [certificate, setCertificate] = useState<CompletionCertificate | null>(() => {
     try {
       const saved = localStorage.getItem('uev_certificate_v1');
@@ -413,38 +424,44 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('uev_valuation_books_v1', JSON.stringify(valuationBooks));
+      safeSave('uev_valuation_books_v1', JSON.stringify(valuationBooks));
     } catch (e) {}
   }, [valuationBooks]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('uev_valuation_rows_v1', JSON.stringify(valuationRows));
+      safeSave('uev_valuation_rows_v1', JSON.stringify(valuationRows));
     } catch (e) {}
   }, [valuationRows]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('uev_contract_v1', JSON.stringify(contract));
+      safeSave('uev_contract_v1', JSON.stringify(contract));
     } catch (e) {}
   }, [contract]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('uev_ipc_bills_v1', JSON.stringify(ipcBills));
+      safeSave('uev_ipc_bills_v1', JSON.stringify(ipcBills));
     } catch (e) {}
   }, [ipcBills]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('uev_certificate_v1', JSON.stringify(certificate));
+      safeSave('uev_variations_v1', JSON.stringify(variations));
+    } catch (e) {}
+  }, [variations]);
+
+  useEffect(() => {
+    try {
+      safeSave('uev_certificate_v1', JSON.stringify(certificate));
     } catch (e) {}
   }, [certificate]);
 
   // Automatic Persistence Effects
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+      safeSave(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
     } catch (e) {
       console.error('Failed to save projects to localStorage:', e);
     }
@@ -452,7 +469,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_PROJECT_ID, activeProjectId);
+      safeSave(STORAGE_KEYS.ACTIVE_PROJECT_ID, activeProjectId);
     } catch (e) {
       console.error('Failed to save activeProjectId to localStorage:', e);
     }
@@ -460,7 +477,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.ZONE_RATES_MAP, JSON.stringify(zoneRatesMap));
+      safeSave(STORAGE_KEYS.ZONE_RATES_MAP, JSON.stringify(zoneRatesMap));
     } catch (e) {
       console.error('Failed to save zoneRatesMap to localStorage:', e);
     }
@@ -468,7 +485,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.NORMS, JSON.stringify(norms));
+      safeSave(STORAGE_KEYS.NORMS, JSON.stringify(norms));
     } catch (e) {
       console.error('Failed to save norms to localStorage:', e);
     }
@@ -476,7 +493,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.ZONES, JSON.stringify(zones));
+      safeSave(STORAGE_KEYS.ZONES, JSON.stringify(zones));
     } catch (e) {
       console.error('Failed to save zones to localStorage:', e);
     }
@@ -484,7 +501,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.FISCAL_YEARS, JSON.stringify(fiscalYears));
+      safeSave(STORAGE_KEYS.FISCAL_YEARS, JSON.stringify(fiscalYears));
     } catch (e) {
       console.error('Failed to save fiscalYears to localStorage:', e);
     }
@@ -492,7 +509,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.SELECTED_ZONE, JSON.stringify(selectedZone));
+      safeSave(STORAGE_KEYS.SELECTED_ZONE, JSON.stringify(selectedZone));
     } catch (e) {
       console.error('Failed to save selectedZone to localStorage:', e);
     }
@@ -500,7 +517,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.SELECTED_FY, selectedFY);
+      safeSave(STORAGE_KEYS.SELECTED_FY, selectedFY);
     } catch (e) {
       console.error('Failed to save selectedFY to localStorage:', e);
     }
@@ -508,7 +525,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_FY, currentFY);
+      safeSave(STORAGE_KEYS.CURRENT_FY, currentFY);
     } catch (e) {
       console.error('Failed to save currentFY to localStorage:', e);
     }
@@ -516,7 +533,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_TEMPLATE, JSON.stringify(activeTemplate));
+      safeSave(STORAGE_KEYS.ACTIVE_TEMPLATE, JSON.stringify(activeTemplate));
     } catch (e) {
       console.error('Failed to save activeTemplate to localStorage:', e);
     }
@@ -524,7 +541,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.IS_INITIATION_LOCKED, JSON.stringify(isInitiationLocked));
+      safeSave(STORAGE_KEYS.IS_INITIATION_LOCKED, JSON.stringify(isInitiationLocked));
     } catch (e) {
       console.error('Failed to save isInitiationLocked to localStorage:', e);
     }
@@ -532,7 +549,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.INITIATION_LOCK_PWD, initiationLockPassword);
+      safeSave(STORAGE_KEYS.INITIATION_LOCK_PWD, initiationLockPassword);
     } catch (e) {
       console.error('Failed to save initiationLockPassword to localStorage:', e);
     }
@@ -540,7 +557,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.RECENT_FILES, JSON.stringify(recentFiles));
+      safeSave(STORAGE_KEYS.RECENT_FILES, JSON.stringify(recentFiles));
     } catch (e) {
       console.error('Failed to save recentFiles to localStorage:', e);
     }
@@ -642,20 +659,59 @@ export default function App() {
 
   // Derived Active Project
   const project = projects.find((p) => p.id === activeProjectId) || projects[0];
+  // the default tax rate for calculations follows the active project (set during render so child components see it)
+  setCurrentTaxPercent(project.tax_percent);
 
+  const notifyBroken = (n: number) => {
+    if (n > 0) window.setTimeout(() => window.dispatchEvent(new CustomEvent('uev:refs-broken', { detail: n })), 0);
+  };
+  // Every change to the active project goes through here: if items or rows were inserted, deleted or moved,
+  // formula references are rewritten so they keep pointing at the same cells (like a spreadsheet).
   const setProject = useCallback(
     (updater: ProjectEstimate | ((prev: ProjectEstimate) => ProjectEstimate)) => {
       setProjects((prevProjects) =>
         prevProjects.map((p) => {
-          if (p.id === activeProjectId) {
-            return typeof updater === 'function' ? updater(p) : updater;
-          }
-          return p;
+          if (p.id !== activeProjectId) return p;
+          const next = typeof updater === 'function' ? updater(p) : updater;
+          if (!next || next === p || !Array.isArray(next.items) || next.items === p.items) return next;
+          const r = remapEstimateItems(p.items || [], next.items);
+          notifyBroken(r.broken);
+          return r.items === next.items ? next : { ...next, items: r.items };
         })
       );
     },
     [activeProjectId]
   );
+
+  // valuation rows: same idea, grouped by (valuation MB, item)
+  const itemIdsRef = useRef<string[]>([]);
+  itemIdsRef.current = project.items.map((i) => i.id);
+  const setValuationRowsSafe = useCallback(
+    (updater: ValuationMBRow[] | ((prev: ValuationMBRow[]) => ValuationMBRow[])) => {
+      setValuationRows((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        const r = remapValuationRows(prev, next, itemIdsRef.current);
+        notifyBroken(r.broken);
+        return r.rows;
+      });
+    },
+    []
+  );
+  useEffect(() => {
+    const h = (e: Event) => showToast(`${(e as CustomEvent).detail} formula reference(s) pointed at deleted rows or items and now show #REF!. Edit those formulas, or undo.`);
+    window.addEventListener('uev:refs-broken', h);
+    return () => window.removeEventListener('uev:refs-broken', h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // the project's item ORDER changed: valuation formulas that name items by position follow
+  const prevItemIdsRef = useRef<string[]>(project.items.map((i) => i.id));
+  useEffect(() => {
+    const oldIds = prevItemIdsRef.current, newIds = project.items.map((i) => i.id);
+    prevItemIdsRef.current = newIds;
+    if (oldIds.length === newIds.length && oldIds.every((id, i) => id === newIds[i])) return;
+    setValuationRows((rows) => { const r = remapValuationItemOrder(rows, oldIds, newIds); notifyBroken(r.broken); return r.rows; });
+  }, [project.items]);
 
   // MB Dependency Tracker hook: Recalculates all linked quantities and sub-items across MB and BOQ
   useMBDependencyTracker(project, setProject);
@@ -850,7 +906,7 @@ export default function App() {
             zone: parsed.zone || targetZone.name_en,
             fiscal_year: parsed.fiscal_year || targetFY,
             contractor_overhead_percent: parsed.contractor_overhead_percent || 15,
-            tax_percent: parsed.tax_percent || 13,
+            tax_percent: parsed.tax_percent ?? 10,
             lead_distance_km: parsed.lead_distance_km || 0,
             items: parsed.items || [],
             created_at: parsed.created_at || new Date().toISOString(),
@@ -1021,6 +1077,7 @@ export default function App() {
 
   return (
     <AppShell
+      contract={contract}
       activeTab={activeTab}
       setActiveTab={setActiveTab}
       zones={zones}
@@ -1222,7 +1279,7 @@ export default function App() {
           valuationBooks={valuationBooks}
           setValuationBooks={setValuationBooks}
           valuationRows={valuationRows}
-          setValuationRows={setValuationRows}
+          setValuationRows={setValuationRowsSafe}
           onNavigateToTab={setActiveTab}
         />
       )}
@@ -1250,6 +1307,25 @@ export default function App() {
         />
       )}
 
+      {activeTab === 'ipc-bill' && (
+        <IPCBillView
+          project={project}
+          contract={contract}
+          valuationRows={valuationRows}
+          ipcBills={ipcBills}
+          setIpcBills={setIpcBills}
+          showToast={showToast}
+        />
+      )}
+
+      {activeTab === 'contract-setup' && (
+        <ContractSetupView project={project} contract={contract} setContract={setContract} showToast={showToast} />
+      )}
+
+      {activeTab === 'variation-order' && (
+        <VariationOrderView project={project} contract={contract} variations={variations} setVariations={setVariations} showToast={showToast} />
+      )}
+
       {/* 3. POST-CONTRACT VALUATION MODULE */}
       {(activeTab === 'valuation-mb' || activeTab === 'valuation-abstract') && (
         <ValuationMBView
@@ -1259,7 +1335,7 @@ export default function App() {
           valuationBooks={valuationBooks}
           setValuationBooks={setValuationBooks}
           valuationRows={valuationRows}
-          setValuationRows={setValuationRows}
+          setValuationRows={setValuationRowsSafe}
           norms={norms}
           resources={resources}
           selectedZone={selectedZone}

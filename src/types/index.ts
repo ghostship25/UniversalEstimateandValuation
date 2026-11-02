@@ -389,8 +389,9 @@ export interface Contract {
   tender_discount_percent: number;
   start_date_iso: string;
   completion_date_iso: string;
-  retention_percent: number; // e.g., 5%
+  retention_percent: number; // % of each bill held back, set in Contract Setup
   advance_given: number;
+  advance_recovery_percent?: number; // % of each bill's gross used to repay the advance
   status: 'ACTIVE' | 'SUBSTANTIALLY_COMPLETED' | 'TERMINATED' | 'CLOSED';
 }
 
@@ -442,7 +443,7 @@ export interface IPCBill {
   period_to_iso: string;
   gross_amount_this_bill: number;
   gross_amount_cumulative: number;
-  retention_deduction: number; // 5%
+  retention_deduction: number;
   advance_deduction: number;
   tax_amount: number;
   net_payable_amount: number;

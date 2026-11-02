@@ -44,7 +44,7 @@ export const ContractAgreementView: React.FC<ContractAgreementViewProps> = ({
   const [contractNumber, setContractNumber] = useState(contract?.contract_number || `NCB-${project.fiscal_year.replace('/', '-')}-01`);
   const [agreementDateBs, setAgreementDateBs] = useState(contract?.start_date_iso || '2026-05-15');
   const [completionDateBs, setCompletionDateBs] = useState(contract?.completion_date_iso || '2027-02-30');
-  const [tenderDiscountPercent, setTenderDiscountPercent] = useState<number>(contract?.tender_discount_percent || 8.5); // 8.5% below estimate
+  const [tenderDiscountPercent, setTenderDiscountPercent] = useState<number>(contract?.tender_discount_percent ?? 0);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
   // Itemized Contractor Rates state
@@ -54,7 +54,7 @@ export const ContractAgreementView: React.FC<ContractAgreementViewProps> = ({
       if (it.contractor_rate) {
         initial[it.id] = it.contractor_rate;
       } else {
-        const discountFactor = 1 - (contract?.tender_discount_percent || 8.5) / 100;
+        const discountFactor = 1 - (contract?.tender_discount_percent ?? 0) / 100;
         initial[it.id] = Math.round(it.calculated_unit_rate * discountFactor * 100) / 100;
       }
     });
@@ -174,7 +174,7 @@ export const ContractAgreementView: React.FC<ContractAgreementViewProps> = ({
         tender_discount_percent: Math.abs(variancePercent),
         start_date_iso: agreementDateBs,
         completion_date_iso: completionDateBs,
-        retention_percent: 5,
+        retention_percent: 0, // set in Contract Setup; never assumed
         advance_given: 0,
         status: 'ACTIVE'
       });

@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { ProjectEstimate, RateNormItem, ResourceMaster, ZoneInfo } from '../types';
 import { calculateItemRate } from './rateEngine';
 import { currencyCode } from './currency';
+import { defaultTaxPercent } from './taxDefaults';
 
 export interface MasterWorkbookExportOptions {
   project: ProjectEstimate;
@@ -27,7 +28,7 @@ export function exportMasterWorkbookExcel(options: MasterWorkbookExportOptions):
     selectedFY,
     calcMode = 'user',
     overheadPercent = 15,
-    taxPercent = 13
+    taxPercent = defaultTaxPercent()
   } = options;
 
   const wb = XLSX.utils.book_new();

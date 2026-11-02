@@ -741,7 +741,7 @@ export const BarBendingScheduleView: React.FC<BarBendingScheduleViewProps> = ({
           updated[existingIdx] = {
             ...updated[existingIdx],
             estimated_quantity: Math.round(steelQtyKg),
-            total_amount: Math.round(steelQtyKg * (updated[existingIdx].calculated_unit_rate || 145)),
+            total_amount: Math.round(steelQtyKg * (updated[existingIdx].calculated_unit_rate ?? 0)),
             mb_rows: mbRowList
           };
           return { ...prev, items: updated };
@@ -803,7 +803,7 @@ export const BarBendingScheduleView: React.FC<BarBendingScheduleViewProps> = ({
           updatedItems[itemIdx] = {
             ...current,
             estimated_quantity: newQty,
-            total_amount: Math.round(newQty * (current.calculated_unit_rate || 145)),
+            total_amount: Math.round(newQty * (current.calculated_unit_rate ?? 0)),
             mb_rows: combinedMbRows
           };
           syncedComponentsCount++;

@@ -13,7 +13,8 @@
     "lint": "tsc --noEmit",
     "desktop:dev": "vite",
     "desktop:build": "vite build && electron-builder",
-    "desktop:dist": "npm run build && python3 scripts/build-desktop-dist.py"
+    "desktop:dist": "npm run build && python3 scripts/build-desktop-dist.py",
+    "test": "vitest run"
   },
   "build": {
     "appId": "com.uev.app",
@@ -52,6 +53,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
+    "dxf-parser": "^1.1.2",
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -85,7 +87,8 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vitest": "^2.1.9"
   },
   "license": "GPL-2.0-only"
 }

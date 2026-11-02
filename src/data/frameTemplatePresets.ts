@@ -136,7 +136,7 @@ export const DEFAULT_FRAME_TEMPLATES: PrintFrameTemplate[] = [
       contingency_percent: 3.0,
       tax_enabled: true,
       tax_label: 'Value Added Tax - Tax',
-      tax_percent: 13.0,
+      tax_percent: 10,
       grand_total_label_en: 'GRAND TOTAL AMOUNT (Inclusive of Tax):',
       in_words_prefix_en: 'In Words:',
       notes: [
@@ -208,7 +208,7 @@ export const DEFAULT_FRAME_TEMPLATES: PrintFrameTemplate[] = [
       contingency_percent: 3.0,
       tax_enabled: true,
       tax_label: 'Tax 13%',
-      tax_percent: 13.0,
+      tax_percent: 10,
       grand_total_label_en: 'ESTIMATED TOTAL (Inclusive of Tax):',
       in_words_prefix_en: 'In Words:',
       notes: [
@@ -347,7 +347,7 @@ export const DEFAULT_FRAME_TEMPLATES: PrintFrameTemplate[] = [
       contingency_percent: 0,
       tax_enabled: true,
       tax_label: 'Tax 13%',
-      tax_percent: 13.0,
+      tax_percent: 10,
       grand_total_label_en: 'Grand Total Resource Budget:',
       in_words_prefix_en: 'In Words:',
       notes: [
@@ -415,7 +415,7 @@ export const DEFAULT_FRAME_TEMPLATES: PrintFrameTemplate[] = [
       contingency_percent: 0,
       tax_enabled: true,
       tax_label: 'Tax 13%',
-      tax_percent: 13.0,
+      tax_percent: 10,
       grand_total_label_en: 'Total Bill Amount with Tax:',
       in_words_prefix_en: 'In Words:',
       notes: [
@@ -479,7 +479,7 @@ export const DEFAULT_FRAME_TEMPLATES: PrintFrameTemplate[] = [
       contingency_percent: 0,
       tax_enabled: true,
       tax_label: 'Tax Addition',
-      tax_percent: 13.0,
+      tax_percent: 10,
       grand_total_label_en: 'NET PAYABLE AMOUNT (After All Deductions):',
       in_words_prefix_en: 'Net Payable in Words:',
       notes: [

@@ -1,3 +1,4 @@
+import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { ProjectEstimate } from '../types';
 
@@ -49,7 +50,8 @@ export async function getSQLiteDB(): Promise<Database> {
 
   if (!SQL) {
     SQL = await initSqlJs({
-      locateFile: (file) => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/${file}`
+      // bundled with the app (no CDN), so the database works fully offline
+      locateFile: () => sqlWasmUrl
     });
   }
 

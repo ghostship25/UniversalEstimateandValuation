@@ -28,7 +28,8 @@ export function evaluateMBFormula(
     if (typeof val === 'string') {
       const trimmed = val.trim();
       if (trimmed.startsWith('=')) {
-        if (rIndex === currentRowIndex && propName && trimmed.toLowerCase().includes(propName)) {
+        // self-reference guard: only for the same item's own row (a row with the same number in ANOTHER item is a different cell)
+        if (targetRows === rows && rIndex === currentRowIndex && propName && trimmed.toLowerCase().includes(propName)) {
           return 0;
         }
         return evaluateMBFormula(trimmed, targetRows, rIndex, allItems, depth + 1);

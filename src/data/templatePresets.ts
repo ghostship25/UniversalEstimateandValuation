@@ -649,7 +649,7 @@ Note: This notice board must be displayed visibly at the work site before the pr
     description: 'Summary of Public Procurement Act 2063 & Financial Rules governing deductions in bills.',
     content: `
 1. Tax (Tax):
-   - Standard Rate: 13% applied to all taxable civil construction items.
+   - Tax: the project tax rate is applied to all taxable items.
    - User committee materials purchased with invoice include Tax; labor is Tax-exempt.
 
 2. Retention Money:

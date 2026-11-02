@@ -1,3 +1,4 @@
+import { evalCellValue } from './mbCellValue';
 import { BOQItem, MBRow, ProjectEstimate } from '../types';
 import { evaluateMBFormula } from './mbFormulaEvaluator';
 import { calcQuantityVal } from './rateEngine';
@@ -9,20 +10,26 @@ export function getItemUnitRate(item: BOQItem, rateMode: 'user' | 'contractor' =
   return item.contractor_rate !== undefined ? item.contractor_rate : item.calculated_unit_rate || 0;
 }
 
-function evalValOrFormula(val: any, rows: MBRow[], idx: number, allItems: BOQItem[]): number {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : val;
-  if (typeof val === 'string') {
-    const trimmed = val.trim();
-    if (!trimmed) return 0;
-    if (trimmed.startsWith('=') || /[+\-*/]/.test(trimmed)) {
-      const res = evaluateMBFormula(trimmed, rows, idx, allItems);
-      return isNaN(res) ? 0 : res;
-    }
-    const num = parseFloat(trimmed);
-    return isNaN(num) ? 0 : num;
-  }
-  return 0;
+function evalValOrFormula(val: any, rows: MBRow[], idx: number, allItems: BOQItem[]): number | null {
+  return evalCellValue(val, (f) => evaluateMBFormula(f, rows, idx, allItems));
+}
+
+/**
+ * Base quantity of a Measurement Book row from its No. / Length / Breadth / Height.
+ *
+ * A typed 0 is a real value: it multiplies, so 1 x 3 x 6 x 0 = 0.
+ * An empty or text cell is blank (null) and is SKIPPED, like an empty column on a paper MB: 1 x 3 x 6 x (empty) = 18.
+ * Only included columns take part. If every included column is blank the quantity is 0.
+ * Negative values (deductions) are kept.
+ */
+export function computeRowBaseQuantity(
+  v: { no: number | null; l: number | null; b: number | null; h: number | null },
+  use: { no: boolean; l: boolean; b: boolean; h: boolean }
+): number {
+  const factors: number[] = [];
+  const take = (on: boolean, x: number | null) => { if (on && x !== null && Number.isFinite(x)) factors.push(x); };
+  take(use.no, v.no); take(use.l, v.l); take(use.b, v.b); take(use.h, v.h);
+  return factors.length === 0 ? 0 : factors.reduce((acc, x) => acc * x, 1);
 }
 
 export function recalculateSingleMBRows(
@@ -53,19 +60,7 @@ export function recalculateSingleMBRows(
       const useB = includedCols.includes('breadth');
       const useH = includedCols.includes('height');
 
-      let computedQty = 1;
-      let activeFactors: number[] = [];
-
-      if (useNo) activeFactors.push(no);
-      if (useL && l !== 0) activeFactors.push(l);
-      if (useB && b !== 0) activeFactors.push(b);
-      if (useH && h !== 0) activeFactors.push(h);
-
-      if (activeFactors.length === 0) {
-        computedQty = useNo ? no : 0;
-      } else {
-        computedQty = activeFactors.reduce((acc, v) => acc * v, 1);
-      }
+      let computedQty = computeRowBaseQuantity({ no, l, b, h }, { no: useNo, l: useL, b: useB, h: useH });
 
       if (currentItem && currentItem.custom_column_names && currentItem.custom_column_config) {
         currentItem.custom_column_names.forEach((colName) => {
@@ -75,8 +70,8 @@ export function recalculateSingleMBRows(
           if (rawVal !== undefined && rawVal !== '') {
             const val = evalValOrFormula(rawVal, currentRows, idx, allItems);
             if (isColIncludedInCalc && config) {
-              if (!isNaN(val)) {
-                if (config.calcMode === 'multiply' && val !== 0) computedQty *= val;
+              if (val !== null && !isNaN(val)) {
+                if (config.calcMode === 'multiply') computedQty *= val;
                 else if (config.calcMode === 'add') computedQty += val;
                 else if (config.calcMode === 'subtract') computedQty -= val;
               }

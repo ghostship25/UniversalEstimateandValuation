@@ -43,7 +43,7 @@ import { exportMBToExcel } from '../services/excelExport';
 import { evaluateMBFormula, resolveFieldValue } from '../services/mbFormulaEvaluator';
 import { recalculateSingleMBRows, recalculateItemTotal as calcItemTotal, recalculateAllProjectItems } from '../services/mbDependencyEngine';
 import { SpreadsheetCell, PointTarget } from './SpreadsheetCell';
-import { PdfTakeoffModal } from '../modules/takeoff/PdfTakeoffModal';
+import { TakeoffModal } from '../modules/takeoff/TakeoffModal';
 import type { MBRowSpec } from '../modules/takeoff/takeoffStore';
 // Remove EmbeddedMBSpreadsheet import
 import { OfficeLiveSyncModal } from './OfficeLiveSyncModal';
@@ -1572,7 +1572,7 @@ Detailed Measurement Rows
               mb_rows: updatedRows
             });
           } else {
-            const effRate = currentMode === 'user' ? (userRate || 8500) : (contractorRate || 8500);
+            const effRate = currentMode === 'user' ? (userRate ?? 0) : (contractorRate ?? 0);
 
             const newItem: BOQItem = {
               id: `boq_${Date.now()}_${code}_${Math.random().toString(36).substring(2, 7)}`,
@@ -1581,7 +1581,7 @@ Detailed Measurement Rows
               description: matchedNorm?.description || `Imported Work Item (${code})`,
               unit: matchedNorm?.base_unit || 'Cu.m.',
               estimated_quantity: 0,
-              calculated_unit_rate: activeRate || 8500,
+              calculated_unit_rate: activeRate ?? 0,
               user_rate: userRate || effRate,
               contractor_rate: contractorRate || effRate,
               mode: currentMode,
@@ -3559,7 +3559,7 @@ Measurement Book
       )}
 
       {/* Modal for Linking Cells / MB Items */}
-      <PdfTakeoffModal
+      <TakeoffModal
         isOpen={takeoffOpen}
         onClose={() => setTakeoffOpen(false)}
         mode="estimate"
