@@ -100,10 +100,6 @@ Project files use `.uep` and master templates use `.uet` (both JSON).
 
 Everything runs locally unless you enable the optional AI assistant, which sends your prompt and limited project context to the Gemini API.
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 5d3ce35fa467459b405a52fe693eb9e7e57f8f60
 The app is fully client-side (data stays in the browser), so Pages is enough. The optional Gemini AI endpoints in `server.ts` need a Node host (Render, Railway, Fly.io); set `GEMINI_API_KEY` there as an environment variable, never in the repo.
 
 ## License

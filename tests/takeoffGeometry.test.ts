@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { geometryOf, quantOf, buildRow, pitchFactor, sendOptions } from '../src/modules/takeoff/takeoffGeometry';
+import { toRowSpec } from '../src/modules/takeoff/takeoffStore';
 import type { TakeoffMeasurement } from '../src/modules/takeoff/takeoffStore';
 
 const P = (x: number, y: number) => ({ x, y });
@@ -61,5 +62,24 @@ describe('takeoff quantities and MB rows (0.1 m per unit: 120 x 80 units = 12 x 
   it('send options depend on the shape', () => {
     expect(sendOptions(rect).map((o) => o.id)).toEqual(['value', 'perimeter', 'LxB', 'BxL', 'LxH']);
     expect(sendOptions({ ...rect, shape: 'polygon' }).map((o) => o.id)).toEqual(['value', 'perimeter']);
+  });
+});
+
+describe('legacy PDF takeoff row conversion', () => {
+  const measurement: TakeoffMeasurement = {
+    id: 'm1', page: 2, type: 'length', label: 'Wall', points: [], deduct: true, b: 0.2, h: 3, links: [],
+  };
+
+  it('maps dimensions, deduction, and takeoff metadata into an MB row', () => {
+    expect(toRowSpec(measurement, 12.34567, 'Plan.pdf', 'row1')).toEqual({
+      id: 'row1',
+      particulars: 'Deduct: Wall',
+      no_of_units: -1,
+      length: 12.346,
+      breadth: 0.2,
+      height: 3,
+      remarks: 'Takeoff: Plan.pdf p.2',
+      takeoff_id: 'm1',
+    });
   });
 });

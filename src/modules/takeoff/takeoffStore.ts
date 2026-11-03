@@ -201,3 +201,38 @@ export interface MBRowSpec {
   remarks: string;
   takeoff_id: string;
 }
+
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** Convert a measurement into the N × L × B × H columns of a Measurement Book row. */
+export function toRowSpec(m: TakeoffMeasurement, value: number, sheetName: string, rowId: string): MBRowSpec {
+  const sign = m.deduct ? -1 : 1;
+  let noOfUnits = 1;
+  let length = 1;
+  let breadth = 1;
+  let height = 1;
+
+  if (m.type === 'count') {
+    noOfUnits = value;
+    breadth = m.b ?? 1;
+    height = m.h ?? 1;
+  } else if (m.type === 'length') {
+    length = r3(value);
+    breadth = m.b ?? 1;
+    height = m.h ?? 1;
+  } else {
+    length = r3(value);
+    height = m.h ?? 1;
+  }
+
+  return {
+    id: rowId,
+    particulars: `${m.deduct ? 'Deduct: ' : ''}${m.label}`,
+    no_of_units: sign * noOfUnits,
+    length,
+    breadth,
+    height,
+    remarks: `Takeoff: ${sheetName} p.${m.page}`,
+    takeoff_id: m.id,
+  };
+}
