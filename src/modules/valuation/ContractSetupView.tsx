@@ -33,7 +33,7 @@ export const ContractSetupView: React.FC<ContractSetupViewProps> = ({
     contract_number: contract?.contract_number || `CNT/${project.zone.toUpperCase()}/2026-27/01`,
     contract_title: contract?.contract_title || `${project.title}`,
     contractor_name: contract?.contractor_name || 'Summit Builders & Construction Pvt. Ltd.',
-    contractor_pan: contract?.contractor_pan || '301294857',
+    contractor_tax_id: contract?.contractor_tax_id || '',
     awarded_amount: contract?.awarded_amount || Math.round(engineerEstimateTotal * 0.88 * 100) / 100, // 12% below estimate by default
     engineer_estimate_amount: engineerEstimateTotal,
     tender_discount_percent: contract?.tender_discount_percent ?? 0,
@@ -55,7 +55,7 @@ export const ContractSetupView: React.FC<ContractSetupViewProps> = ({
       contract_number: formState.contract_number || 'CONTRACT-01',
       contract_title: formState.contract_title || project.title,
       contractor_name: formState.contractor_name || 'Contractor Name',
-      contractor_pan: formState.contractor_pan || '300000000',
+      contractor_tax_id: formState.contractor_tax_id || '',
       awarded_amount: Number(formState.awarded_amount) || engineerEstimateTotal,
       engineer_estimate_amount: engineerEstimateTotal,
       tender_discount_percent: Number(formState.tender_discount_percent) || 0,
@@ -185,11 +185,11 @@ export const ContractSetupView: React.FC<ContractSetupViewProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Contractor PAN / Tax Number</label>
+                <label className="block font-bold text-slate-700 mb-1">Contractor Tax ID / Number</label>
                 <input
                   type="text"
-                  value={formState.contractor_pan}
-                  onChange={(e) => setFormState({ ...formState, contractor_pan: e.target.value })}
+                  value={formState.contractor_tax_id}
+                  onChange={(e) => setFormState({ ...formState, contractor_tax_id: e.target.value })}
                   className="w-full p-2.5 border rounded-xl font-mono text-slate-900"
                 />
               </div>
@@ -301,7 +301,7 @@ export const ContractSetupView: React.FC<ContractSetupViewProps> = ({
               <div>
                 <span className="text-slate-400 font-bold block text-[10px] uppercase">Awarded Contractor</span>
                 <span className="font-bold text-slate-900">{contract?.contractor_name}</span>
-                <span className="block text-[11px] text-slate-500">PAN: {contract?.contractor_pan}</span>
+                <span className="block text-[11px] text-slate-500">Tax ID: {contract?.contractor_tax_id}</span>
               </div>
               <div>
                 <span className="text-slate-400 font-bold block text-[10px] uppercase">Contract Amount</span>

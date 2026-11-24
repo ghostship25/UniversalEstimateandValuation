@@ -28,6 +28,7 @@ import { ContractAgreementView } from './modules/valuation/ContractAgreementView
 import { IPCBillView } from './modules/valuation/IPCBillView';
 import { setCurrentTaxPercent } from './services/taxDefaults';
 import { safeSave } from './services/saveStatus';
+import { DocHistory } from './services/docHistory';
 import { remapEstimateItems, remapValuationRows, remapValuationItemOrder } from './services/refRemap';
 import { VariationOrderView } from './modules/valuation/VariationOrderView';
 
@@ -383,7 +384,7 @@ export default function App() {
         book_ref_no: 'MB/VAL/2026-27/01',
         page_start: 1,
         page_end: 15,
-        verified_by: 'Er. B. K. Sharma (Site Engineer)',
+        verified_by: 'Site Engineer',
         remarks: 'Initial execution measurements for site valuation',
         created_at: new Date().toISOString()
       }
@@ -657,6 +658,48 @@ export default function App() {
     });
   };
 
+
+  // ---- undo / redo for the whole document ----------------------------------------------------------
+  type DocSnap = {
+    projects: typeof projects; zoneRatesMap: typeof zoneRatesMap; norms: typeof norms; contract: typeof contract;
+    valuationBooks: typeof valuationBooks; valuationRows: typeof valuationRows; ipcBills: typeof ipcBills;
+    variations: typeof variations; certificate: typeof certificate;
+  };
+  const docSnap: DocSnap = { projects, zoneRatesMap, norms, contract, valuationBooks, valuationRows, ipcBills, variations, certificate };
+  const snapSame = (x: DocSnap, y: DocSnap) => (Object.keys(x) as (keyof DocSnap)[]).every((k) => x[k] === y[k]);
+  const historyRef = useRef<DocHistory<DocSnap> | null>(null);
+  if (!historyRef.current) historyRef.current = new DocHistory<DocSnap>(docSnap);
+  const [, bumpHistory] = useState(0);
+  const derivedRef = useRef(false);
+  useEffect(() => {
+    if (derivedRef.current) { derivedRef.current = false; historyRef.current!.merge(docSnap); return; }
+    if (historyRef.current!.record(docSnap, snapSame)) bumpHistory((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, zoneRatesMap, norms, contract, valuationBooks, valuationRows, ipcBills, variations, certificate]);
+  const applySnap = (s: DocSnap) => {
+    setProjects(s.projects); setZoneRatesMap(s.zoneRatesMap); setNorms(s.norms); setContract(s.contract);
+    setValuationBooks(s.valuationBooks); setValuationRows(s.valuationRows); setIpcBills(s.ipcBills);
+    setVariations(s.variations); setCertificate(s.certificate);
+  };
+  const doUndo = () => { const s = historyRef.current!.undo(); if (s) { applySnap(s); bumpHistory((n) => n + 1); showToast('Undone.'); } else showToast('Nothing to undo.'); };
+  const doRedo = () => { const s = historyRef.current!.redo(); if (s) { applySnap(s); bumpHistory((n) => n + 1); showToast('Redone.'); } else showToast('Nothing to redo.'); };
+  const undoRef = useRef({ doUndo, doRedo });
+  undoRef.current = { doUndo, doRedo };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = !!el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable);
+      if (typing || !(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); undoRef.current.doUndo(); }
+      else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); undoRef.current.doRedo(); }
+    };
+    const onHistory = (e: Event) => { const d = (e as CustomEvent).detail; if (d === 'redo') undoRef.current.doRedo(); else undoRef.current.doUndo(); };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('uev:history', onHistory);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('uev:history', onHistory); };
+  }, []);
+
   // Derived Active Project
   const project = projects.find((p) => p.id === activeProjectId) || projects[0];
   // the default tax rate for calculations follows the active project (set during render so child components see it)
@@ -714,7 +757,12 @@ export default function App() {
   }, [project.items]);
 
   // MB Dependency Tracker hook: Recalculates all linked quantities and sub-items across MB and BOQ
-  useMBDependencyTracker(project, setProject);
+  // recalculations triggered by the dependency tracker are part of the user's edit, not an undo step of their own
+  const setProjectDerived = useCallback(
+    (u: React.SetStateAction<ProjectEstimate>) => { derivedRef.current = true; setProject(u as any); },
+    [setProject]
+  );
+  useMBDependencyTracker(project, setProjectDerived as any);
 
   // Add custom zone handler
   const handleAddCustomZone = (newZone: ZoneInfo) => {
@@ -1077,6 +1125,10 @@ export default function App() {
 
   return (
     <AppShell
+      onUndo={doUndo}
+      onRedo={doRedo}
+      canUndo={historyRef.current!.canUndo}
+      canRedo={historyRef.current!.canRedo}
       contract={contract}
       activeTab={activeTab}
       setActiveTab={setActiveTab}
@@ -1309,6 +1361,7 @@ export default function App() {
 
       {activeTab === 'ipc-bill' && (
         <IPCBillView
+          variations={variations}
           project={project}
           contract={contract}
           valuationRows={valuationRows}
@@ -1323,7 +1376,7 @@ export default function App() {
       )}
 
       {activeTab === 'variation-order' && (
-        <VariationOrderView project={project} contract={contract} variations={variations} setVariations={setVariations} showToast={showToast} />
+        <VariationOrderView project={project} contract={contract} variations={variations} setVariations={setVariations} setProject={setProject} showToast={showToast} />
       )}
 
       {/* 3. POST-CONTRACT VALUATION MODULE */}

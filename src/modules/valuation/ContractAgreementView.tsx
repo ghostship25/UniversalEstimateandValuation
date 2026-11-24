@@ -40,7 +40,7 @@ export const ContractAgreementView: React.FC<ContractAgreementViewProps> = ({
 }) => {
   // Local Contract Form
   const [contractorName, setContractorName] = useState(contract?.contractor_name || 'Mountain Construction & Builders Pvt. Ltd.');
-  const [contractorPan, setContractorPan] = useState(contract?.contractor_pan || '602345678');
+  const [contractorTaxId, setContractorTaxId] = useState(contract?.contractor_tax_id || '');
   const [contractNumber, setContractNumber] = useState(contract?.contract_number || `NCB-${project.fiscal_year.replace('/', '-')}-01`);
   const [agreementDateBs, setAgreementDateBs] = useState(contract?.start_date_iso || '2026-05-15');
   const [completionDateBs, setCompletionDateBs] = useState(contract?.completion_date_iso || '2027-02-30');
@@ -168,7 +168,7 @@ export const ContractAgreementView: React.FC<ContractAgreementViewProps> = ({
         contract_number: contractNumber,
         contract_title: project.title,
         contractor_name: contractorName,
-        contractor_pan: contractorPan,
+        contractor_tax_id: contractorTaxId,
         awarded_amount: contractTotal,
         engineer_estimate_amount: estimateTotal,
         tender_discount_percent: Math.abs(variancePercent),
@@ -303,11 +303,11 @@ export const ContractAgreementView: React.FC<ContractAgreementViewProps> = ({
           </div>
 
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Contractor PAN No.</label>
+            <label className="block font-bold text-slate-700 mb-1">Contractor Tax ID</label>
             <input
               type="text"
-              value={contractorPan}
-              onChange={(e) => setContractorPan(e.target.value)}
+              value={contractorTaxId}
+              onChange={(e) => setContractorTaxId(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900"
             />
           </div>

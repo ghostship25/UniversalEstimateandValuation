@@ -10,7 +10,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ showToas
   const [users, setUsers] = useState<UserProfile[]>([
     {
       id: 'usr_1',
-      name: 'Er. S. N. Adhikari',
+      name: 'Alex Morgan',
       email: 'info@example.org',
       role: 'Senior Division Engineer',
       department: 'Department of Infrastructure Development',
@@ -19,7 +19,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ showToas
     },
     {
       id: 'usr_2',
-      name: 'Er. B. K. Sharma',
+      name: 'Sam Rivera',
       email: 'info@example.org',
       role: 'Site Engineer',
       department: 'Building & Housing Division',
@@ -28,7 +28,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ showToas
     },
     {
       id: 'usr_3',
-      name: 'Mr. Ramesh Karki',
+      name: 'Jordan Lee',
       email: 'info@example.org',
       role: 'Accountant',
       department: 'Finance & Accounts Division',
@@ -99,7 +99,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({ showToas
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Er. Anish Thapa"
+              placeholder="e.g. Taylor Brooks"
               className="w-full p-2.5 border rounded-xl font-semibold"
               required
             />

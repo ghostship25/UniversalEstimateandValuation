@@ -616,7 +616,7 @@ export const BOQView: React.FC<BOQViewProps> = ({
     }
 
     const customHeaderHtml = `
-      <div style="text-align: center; font-family: 'Kalimati', 'Nirmala UI', sans-serif; margin-bottom: 16px;">
+      <div style="text-align: center; font-family: sans-serif; margin-bottom: 16px;">
         <div style="font-size: 16pt; font-weight: bold; color: #000;">${project.header_config?.authority_name || 'Sample City Authority'}</div>
         <div style="font-size: 13pt; font-weight: bold; color: #000;">${project.header_config?.office_name || 'Local Authority Office'}</div>
         <div style="font-size: 11pt; font-weight: bold; color: #000;">${project.header_config?.office_address || 'Sample City, Sample Province'}</div>

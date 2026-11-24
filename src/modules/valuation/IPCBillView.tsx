@@ -9,11 +9,13 @@ import {
   ShieldCheck,
   Building2
 } from 'lucide-react';
-import { ProjectEstimate, Contract, ValuationMBRow, IPCBill } from '../../types';
+import { ProjectEstimate, Contract, ValuationMBRow, IPCBill, VariationOrder } from '../../types';
 import { currencyCode } from '../../services/currency';
 import { computeIpc } from '../../services/ipcMath';
+import { exportCsv } from '../takeoff/evidence';
 
 interface IPCBillViewProps {
+  variations?: VariationOrder[];
   project: ProjectEstimate;
   contract: Contract | null;
   valuationRows: ValuationMBRow[];
@@ -23,6 +25,7 @@ interface IPCBillViewProps {
 }
 
 export const IPCBillView: React.FC<IPCBillViewProps> = ({
+  variations = [],
   project,
   contract,
   valuationRows,
@@ -31,6 +34,8 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
   showToast
 }) => {
   const [activeIPCNo, setActiveIPCNo] = useState<number>(1);
+  const [priceAdjText, setPriceAdjText] = useState<string>('');
+  const [releaseText, setReleaseText] = useState<string>('');
 
   // Filter valuation rows for active IPC
   const currentIPCMBRows = valuationRows.filter((r) => r.ipc_number === activeIPCNo);
@@ -43,17 +48,26 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
   }, 0);
 
   const taxRate = project.tax_percent ?? 0;
+  const variationTotal = variations.filter((x) => x.status === 'APPROVED').reduce((s, x) => s + (x.amount_impact || 0), 0);
+  const revisedSum = (contract?.awarded_amount ?? 0) + variationTotal;
   const earlierBills = ipcBills.filter((b) => b.ipc_number < activeIPCNo);
+  const maxIpcNo = Math.max(1, activeIPCNo, ...ipcBills.map((b) => b.ipc_number), ...valuationRows.map((r) => r.ipc_number || 0));
   const grossBefore = valuationRows
     .filter((r) => r.ipc_number < activeIPCNo)
     .reduce((acc, row) => {
       const item = project.items.find((i) => i.id === row.boq_item_id);
       return acc + row.quantity_this_bill * (item?.calculated_unit_rate || 0);
     }, 0);
+  const priceAdjPct = parseFloat(priceAdjText) || 0;
+  const retentionRelease = parseFloat(releaseText) || 0;
   const calc = computeIpc({
     grossThisBill: grossAmountThisBill,
     grossBeforeThisBill: grossBefore,
+    priceAdjustmentPercent: priceAdjPct,
     retentionPercent: contract?.retention_percent ?? 0,
+    retentionHeldBefore: earlierBills.reduce((s, b) => s + (b.retention_deduction || 0), 0),
+    retentionReleasedBefore: earlierBills.reduce((s, b) => s + (b.retention_released || 0), 0),
+    retentionRelease,
     advanceGiven: contract?.advance_given ?? 0,
     advanceRecoveryPercent: contract?.advance_recovery_percent ?? 0,
     advanceRecoveredBefore: earlierBills.reduce((s, b) => s + (b.advance_deduction || 0), 0),
@@ -66,7 +80,27 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
   const netPayable = calc.net;
   const advanceNotConfigured = !!contract && contract.advance_given > 0 && !(contract.advance_recovery_percent && contract.advance_recovery_percent > 0);
 
+
+  const register = [...ipcBills].sort((x, y) => x.ipc_number - y.ipc_number).reduce((acc, b) => {
+    const prev = acc[acc.length - 1];
+    const net = b.net_payable_amount || 0;
+    acc.push({
+      no: b.ipc_number, date: b.bill_date_iso || '', gross: b.gross_amount_this_bill || 0, adj: b.price_adjustment_amount || 0,
+      ret: b.retention_deduction || 0, rel: b.retention_released || 0, adv: b.advance_deduction || 0, tax: b.tax_amount || 0,
+      net, cumGross: (prev?.cumGross || 0) + (b.gross_amount_this_bill || 0), cumNet: (prev?.cumNet || 0) + net,
+    });
+    return acc;
+  }, [] as { no: number; date: string; gross: number; adj: number; ret: number; rel: number; adv: number; tax: number; net: number; cumGross: number; cumNet: number }[]);
+  const exportRegisterCsv = () => {
+    exportCsv([['IPC', 'Date', 'Gross', 'Price adjustment', 'Retention', 'Retention released', 'Advance recovery', 'Tax', 'Net payable', 'Cumulative gross', 'Cumulative net'], ...register.map((r) => [r.no, r.date, r.gross, r.adj, r.ret, r.rel, r.adv, r.tax, r.net, r.cumGross, r.cumNet])], `ipc_register_${(project.title || 'project').replace(/[^a-z0-9]+/gi, '_')}.csv`);
+  };
+
   const currentBill = ipcBills.find((b) => b.ipc_number === activeIPCNo);
+  React.useEffect(() => {
+    setPriceAdjText(currentBill?.price_adjustment_percent ? String(currentBill.price_adjustment_percent) : '');
+    setReleaseText(currentBill?.retention_released ? String(currentBill.retention_released) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIPCNo]);
 
   const handleGenerateOrUpdateIPC = (newStatus: IPCBill['status']) => {
     const newBill: IPCBill = {
@@ -79,6 +113,9 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
       gross_amount_this_bill: roundedGross,
       gross_amount_cumulative: calc.grossCumulative,
       retention_deduction: retentionDeduction,
+      price_adjustment_percent: priceAdjPct,
+      price_adjustment_amount: calc.priceAdjustment,
+      retention_released: calc.retentionReleased,
       advance_deduction: advanceDeduction,
       tax_amount: taxAmount,
       net_payable_amount: netPayable,
@@ -113,13 +150,13 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
           </div>
           <h2 className="text-xl font-extrabold tracking-tight">Interim Payment Certificates (IPC)</h2>
           <p className="text-xs text-blue-100 mt-1">
-            Automated running bill generation with 5% Retention Money, Mobilization Advance recovery, tax, and Net Payable disbursements.
+            Running bills from the contract: retention, advance recovery, price adjustment, tax and net payable.
           </p>
         </div>
 
         {/* IPC Selector Tabs */}
         <div className="flex items-center gap-1.5 bg-blue-950 p-1.5 rounded-xl border border-blue-700">
-          {[1, 2, 3, 4].map((num) => (
+          {Array.from({ length: maxIpcNo }, (_, i) => i + 1).map((num) => (
             <button
               key={num}
               onClick={() => setActiveIPCNo(num)}
@@ -132,6 +169,27 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
               IPC Bill #{num}
             </button>
           ))}
+          <button onClick={() => setActiveIPCNo(maxIpcNo + 1)} data-testid="ipc-new" title="Start the next certificate" className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-200 hover:text-white hover:bg-slate-700 border border-blue-700">+ New IPC</button>
+        </div>
+      </div>
+
+      {/* Contract position + bill-level adjustments */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="ipc-position">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 text-xs space-y-1">
+          <div className="font-bold text-slate-800 text-sm mb-1">Contract position</div>
+          <div className="flex justify-between"><span>Awarded contract sum</span><b className="font-mono">{(contract?.awarded_amount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</b></div>
+          <div className="flex justify-between"><span>Approved variations</span><b className="font-mono">{variationTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</b></div>
+          <div className="flex justify-between border-t pt-1"><span>Revised contract sum</span><b className="font-mono">{revisedSum.toLocaleString('en-US', { minimumFractionDigits: 2 })}</b></div>
+          <div className="flex justify-between"><span>Certified to date (work)</span><b className="font-mono">{calc.grossCumulative.toLocaleString('en-US', { minimumFractionDigits: 2 })}{revisedSum > 0 ? ` (${((calc.grossCumulative / revisedSum) * 100).toFixed(1)}%)` : ''}</b></div>
+          <div className="flex justify-between"><span>Retention held after this bill</span><b className="font-mono">{calc.retentionHeld.toLocaleString('en-US', { minimumFractionDigits: 2 })}</b></div>
+          <div className="flex justify-between"><span>Advance still to recover</span><b className="font-mono">{calc.advanceOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}</b></div>
+        </div>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 text-xs space-y-2">
+          <div className="font-bold text-slate-800 text-sm">This certificate</div>
+          <label className="flex items-center justify-between gap-2">Price adjustment % <span className="text-slate-400">(escalation, may be negative)</span>
+            <input data-testid="ipc-adj" type="number" step="any" value={priceAdjText} onChange={(e) => setPriceAdjText(e.target.value)} placeholder="0" className="w-24 border rounded-lg px-2 py-1 font-mono text-right" /></label>
+          <label className="flex items-center justify-between gap-2">Retention released <span className="text-slate-400">(amount, up to what is held)</span>
+            <input data-testid="ipc-release" type="number" step="any" value={releaseText} onChange={(e) => setReleaseText(e.target.value)} placeholder="0" className="w-24 border rounded-lg px-2 py-1 font-mono text-right" /></label>
         </div>
       </div>
 
@@ -146,7 +204,7 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-sm">
-          <span className="text-[10px] font-bold uppercase text-rose-800 block">Retention Money (5%)</span>
+          <span className="text-[10px] font-bold uppercase text-rose-800 block">{`Retention Money (${contract?.retention_percent ?? 0}%)`}</span>
           <div className="text-xl font-extrabold text-rose-800 font-mono mt-1">
             - {currencyCode()} {retentionDeduction.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
@@ -205,54 +263,28 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
                 <th className="p-3 text-right">Amount ({currencyCode()})</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
-              <tr>
-                <td className="p-3 font-mono">1</td>
-                <td className="p-3 font-bold">Total Gross Value of Work Executed This Period</td>
-                <td className="p-3 text-right font-mono">Valuation MB Row Sum</td>
-                <td className="p-3 text-right font-mono font-bold text-slate-900">
-                  {currencyCode()} {roundedGross.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-              <tr className="bg-slate-50/50">
-                <td className="p-3 font-mono">2</td>
-                <td className="p-3 text-rose-800 font-bold">Less: Retention Money Deduction</td>
-                <td className="p-3 text-right font-mono text-rose-800">5.0% of Gross Value</td>
-                <td className="p-3 text-right font-mono font-bold text-rose-700">
-                  - {currencyCode()} {retentionDeduction.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-              <tr>
-                <td className="p-3 font-mono">3</td>
-                <td className="p-3 text-amber-800 font-bold">Less: Mobilization Advance Recovery</td>
-                <td className="p-3 text-right font-mono text-amber-800">10% Recovery Installment</td>
-                <td className="p-3 text-right font-mono font-bold text-amber-700">
-                  - {currencyCode()} {advanceDeduction.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-              <tr className="bg-slate-50">
-                <td className="p-3 font-mono">4</td>
-                <td className="p-3 font-bold text-slate-900">Subtotal Net Work Executed (Excl. Tax)</td>
-                <td className="p-3 text-right font-mono">Row 1 - Row 2 - Row 3</td>
-                <td className="p-3 text-right font-mono font-bold text-slate-900">
-                  {currencyCode()} {(roundedGross - retentionDeduction - advanceDeduction).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-              <tr>
-                <td className="p-3 font-mono">5</td>
-                <td className="p-3 font-bold text-blue-800">Add: Tax (Tax @ rate)</td>
-                <td className="p-3 text-right font-mono text-blue-800">{`Tax (${taxRate}%) on subtotal`}</td>
-                <td className="p-3 text-right font-mono font-bold text-blue-700">
-                  + {currencyCode()} {taxAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
+            <tbody className="divide-y divide-slate-200 text-slate-800 font-medium" data-testid="ipc-breakdown">
+              {[
+                { n: 1, label: 'Total gross value of work executed this period', note: 'Valuation MB row sum', amt: roundedGross, sign: '', cls: 'text-slate-900', row: '' },
+                { n: 2, label: calc.priceAdjustment < 0 ? 'Less: Price adjustment' : 'Add: Price adjustment', note: `${priceAdjPct}% of gross`, amt: Math.abs(calc.priceAdjustment), sign: calc.priceAdjustment < 0 ? '-' : '+', cls: 'text-violet-700', row: '' },
+                { n: 3, label: 'Less: Retention money', note: `${contract?.retention_percent ?? 0}% of adjusted gross`, amt: retentionDeduction, sign: '-', cls: 'text-rose-700', row: '' },
+                { n: 4, label: 'Less: Advance recovery', note: `${contract?.advance_recovery_percent ?? 0}% of gross, until repaid`, amt: advanceDeduction, sign: '-', cls: 'text-amber-700', row: '' },
+                { n: 5, label: 'Subtotal: taxable amount', note: 'Row 1 + 2 - 3 - 4', amt: calc.afterDeductions, sign: '', cls: 'text-slate-900', row: 'bg-slate-50' },
+                { n: 6, label: 'Add: Tax', note: `${taxRate}% of the taxable amount`, amt: taxAmount, sign: '+', cls: 'text-blue-700', row: '' },
+                { n: 7, label: 'Add: Retention released', note: 'not taxed again', amt: calc.retentionReleased, sign: '+', cls: 'text-emerald-700', row: '' },
+              ].map((r) => (
+                <tr key={r.n} className={r.row}>
+                  <td className="p-3 font-mono">{r.n}</td>
+                  <td className="p-3 font-bold">{r.label}</td>
+                  <td className="p-3 text-right font-mono text-slate-500">{r.note}</td>
+                  <td className={`p-3 text-right font-mono font-bold ${r.cls}`}>{r.sign} {currencyCode()} {r.amt.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                </tr>
+              ))}
               <tr className="bg-emerald-50 text-emerald-950 font-bold text-sm">
-                <td className="p-3 font-mono">6</td>
+                <td className="p-3 font-mono">8</td>
                 <td className="p-3">NET AMOUNT PAYABLE TO CONTRACTOR THIS BILL</td>
-                <td className="p-3 text-right font-mono text-xs">Subtotal + Tax</td>
-                <td className="p-3 text-right font-mono font-extrabold text-emerald-800">
-                  {currencyCode()} {netPayable.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </td>
+                <td className="p-3 text-right font-mono text-xs">Row 5 + 6 + 7</td>
+                <td className="p-3 text-right font-mono font-extrabold text-emerald-800" data-testid="ipc-net">{currencyCode()} {netPayable.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
               </tr>
             </tbody>
           </table>
@@ -287,6 +319,31 @@ export const IPCBillView: React.FC<IPCBillViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Certificates register + cumulative position */}
+      {ipcBills.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden" data-testid="ipc-register">
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
+            <div className="font-bold text-sm text-slate-800">Certificates register (cumulative)</div>
+            <button data-testid="ipc-csv" onClick={exportRegisterCsv} className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-white">Download CSV</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-right">
+              <thead className="bg-slate-100 text-slate-600 uppercase text-[10px]">
+                <tr>{['IPC', 'Date', 'Gross', 'Price adj.', 'Retention', 'Released', 'Advance', 'Tax', 'Net payable', 'Cum. gross', 'Cum. net'].map((h) => <th key={h} className="p-2 font-bold">{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y font-mono">
+                {register.map((r) => (
+                  <tr key={r.no}>
+                    <td className="p-2 font-bold text-left">#{r.no}</td><td className="p-2">{r.date}</td>
+                    {[r.gross, r.adj, r.ret, r.rel, r.adv, r.tax, r.net, r.cumGross, r.cumNet].map((n, i) => <td key={i} className={`p-2 ${i === 6 ? 'font-bold' : ''}`}>{n.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

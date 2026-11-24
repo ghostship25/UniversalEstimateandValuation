@@ -13,6 +13,23 @@ export type Shape =
 /** how an area measurement is written into the MB columns */
 export type SendAs = 'value' | 'perimeter' | 'LxB' | 'BxL' | 'LxH';
 export interface Pitch { mode: 'ratio' | 'deg'; value: number }
+
+/** the four quantity columns of an MB row */
+export type RowCol = 'N' | 'L' | 'B' | 'H';
+
+/**
+ * A takeoff row is ONE Measurement Book row of one item description that is built from several measurements:
+ * a count into No., a length into L, another into B or H, or an area into L x B ... Columns that are not
+ * measured stay blank (skipped in the quantity). It can be filled one column at a time and continued later.
+ */
+export interface TakeoffRow {
+  id: string;
+  itemId: string;
+  label: string;                         // the MB row description (particulars)
+  manual: Partial<Record<RowCol, number>>; // typed values for columns that are not measured
+  mbRowId?: string;                      // the MB row created from it (kept up to date while autoSync is on)
+  autoSync: boolean;
+}
 export interface Pt { x: number; y: number }
 
 export interface TakeoffLink { itemId: string; rowId: string }
@@ -29,6 +46,8 @@ export interface TakeoffMeasurement {
   b?: number;              // optional breadth / width factor
   h?: number;              // optional height / depth / thickness factor
   sendAs?: SendAs;         // area shapes: value | perimeter | L x B | B x L | L x H
+  rowId?: string;          // takeoff row this measurement contributes to (otherwise it makes its own MB row)
+  col?: RowCol;            // the column it feeds in that row (count -> N by default; areas use sendAs)
   pitch?: Pitch;           // slope: multiplies a plan length / area by the true-length factor
   waste?: number;          // % allowance added to the quantity
   note?: string;
@@ -61,6 +80,7 @@ export interface TakeoffSheet {
   scaleInfo?: Record<number, ScaleInfo>;
   outUnit: 'm' | 'ft';
   measurements: TakeoffMeasurement[];
+  rows?: TakeoffRow[];
   updatedAt: number;
 }
 
@@ -194,10 +214,11 @@ export function measurementValue(m: TakeoffMeasurement, mpp: number | undefined,
 export interface MBRowSpec {
   id: string;
   particulars: string;
-  no_of_units: number;
-  length: number;
-  breadth: number;
-  height: number;
+  /** '' = blank: the column is skipped in the quantity */
+  no_of_units: number | '';
+  length: number | '';
+  breadth: number | '';
+  height: number | '';
   remarks: string;
   takeoff_id: string;
 }

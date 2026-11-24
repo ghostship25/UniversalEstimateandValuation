@@ -22,6 +22,11 @@ Effort: S ≈ 1 to 2 days · M ≈ 3 to 7 days · L ≈ 2 to 4 weeks (one develo
 | **P0 #3 Contract Setup, IPC Certificates, Variation Orders reachable** from the Valuation ribbon | Done |
 | **P0 #4 Full backup & restore, Saved / NOT SAVED, backup age, offline (no CDN)** | Done |
 | **P0 #5 Invented defaults removed** (retention, advance, tax, rates, dates) | Done |
+| **P1 #8 Excel-like MB grid:** real undo/redo (the old buttons were fake), Enter/Tab/arrow navigation, range selection, copy / cut / paste (also with Excel), clear, fill down | Done |
+| **P1 #10 Contract and valuation depth (part):** revised contract sum from approved variations, extra items added to the BOQ, price adjustment, retention release, unlimited IPCs, cumulative certificates register + CSV | Done (rest below) |
+| **Takeoff rows:** one MB row per item description built from a count, lengths, an area and typed values, column by column, kept in sync with the MB, also from DXF and in the Valuation MB | Done |
+| P1 #7 remaining takeoff items, P1 #9 Regional flexibility | Planned |
+| **UX & onboarding from a first-time user review (U1 to U8 below):** Start-here guide, next-step indicator, sample project with reset, settings summary, glossary, backup reminder, phone layout | Planned |
 | Valuation rows leaking into the Estimate MB (inflated estimate quantities) | Fixed |
 | Hardcoded "Tax: 13% Added" label in the Valuation ribbon | Fixed |
 | Everything below | Planned |
@@ -61,34 +66,66 @@ Decision to confirm with your accountant: the IPC computes tax on the amount aft
 
 ## P1: High-value features
 
-### 6. Takeoff phase 2: DXF drawings (done; refinements below)
-Parse DXF in the browser (`dxf-parser`), render it, and measure by clicking entities or by layer: exact lengths, areas and block counts with no scale calibration.
-- Read `$INSUNITS`, LINE / LWPOLYLINE / CIRCLE / ARC / INSERT (block counts) / HATCH.
-- Layer table with totals, one-click "send layer to item".
-- DWG cannot be read reliably in the browser; document the conversion route (free ODA File Converter → DXF).
+### 6. Takeoff phase 2: DXF drawings: done (refinements in #7)
 
-### 7. Takeoff next steps (S to M)
-Already done: shapes, per-page / all-pages / range scale, evidence layers, PNG and CSV export. Remaining:
-- Snap to vector PDF line ends and corners (extract paths with pdf.js).
-- Different scales on one sheet (viewport scales), and a scale-verification tool.
-- Multi-page evidence pack (PDF) with one page per item layer.
-- DXF: hatch areas, xref/blocks measured by layer inside blocks, dimension entities, DWG via a conversion service.
+### 7. Takeoff next steps (S to M): partly done
+Already done: shapes, per-page / all-pages / range scale, evidence layers, PNG and CSV export, DXF takeoff, **takeoff rows** (one MB row filled column by column from several measurements). Remaining:
 - Edit points after drawing (drag vertices), copy a measurement to another page.
+- Snap to vector PDF line ends and corners (extract paths with pdf.js).
+- Different scales on one sheet (viewport scales) and a scale-verification tool.
+- Multi-page evidence pack (PDF) with one page per item layer.
 - Revision compare: overlay two versions of a sheet and flag changed areas.
-- For the Valuation MB: colour measurements per bill and show cumulative progress.
-- Export a marked-up PDF with the measurement labels.
+- DXF: hatch areas, geometry inside blocks by layer, dimension entities, DWG through a conversion service.
+- Valuation MB: colour measurements per bill and show cumulative progress.
+- Takeoff measurements are not part of undo / redo yet (they live in IndexedDB, not in the project state).
 
-### 8. Excel-like grid behaviour in the MB (M)
-Arrow-key / Tab / Enter navigation, copy-paste of cell ranges, fill-down, multi-cell select, undo/redo for cell edits.
+### 8. Excel-like grid behaviour in the MB: done
+Both MBs (Estimate and Valuation):
+- **Undo / redo** for the whole document (projects, rates, MB and valuation rows, contract, bills, variations): the header buttons, Ctrl+Z and Ctrl+Y (inside a cell with nothing typed, Ctrl+Z also undoes the document). An edit and the recalculation it triggers are one step. The old Undo / Redo buttons only showed a message and did nothing.
+- **Keyboard:** Enter moves down (Shift+Enter up), Tab / Shift+Tab move sideways and wrap to the next row, arrow keys move between cells (left / right only at the ends of the text), all skipping heading rows and continuing into the next item.
+- **Ranges:** Shift+arrows or Shift+click select a block within one item; Ctrl+C / Ctrl+X copy and cut it as tab-separated text; Ctrl+V pastes a block copied from the app (formulas move with their row) or from Excel; pasting one value over a range fills it; Delete clears; Ctrl+D fills down (formulas shift row by row).
+Still open: fill-right and the fill handle (drag), pasting formulas written in Excel syntax, selecting across several items.
 
-### 9. Regional flexibility (M to L)
-- Several tax types per project (VAT/GST/sales tax, withholding), per-item tax status.
-- Imperial / metric rate libraries and unit conversion.
-- Standard Method of Measurement templates (e.g. NRM2, CESMM4, ASMM, CSI MasterFormat) as importable item-code sets.
+### 9. Regional flexibility (M to L): planned
+- Several tax types per project (VAT / GST / sales tax, withholding), per-item tax status.
+- Imperial and metric rate libraries and unit conversion.
+- Standard Method of Measurement templates (NRM2, CESMM4, ASMM, CSI MasterFormat) as importable item-code sets.
 - Currency conversion table for multi-currency projects.
 
-### 10. Contract and valuation depth (M to L)
-Approved variation orders flowing into the contract value and valuation quantities; Price adjustment / escalation formulas, advance-payment recovery schedules, retention release, materials on site, variation-order approval workflow, IPC history and cumulative reports.
+### 10. Contract and valuation depth (M to L): partly done
+Done:
+- **Variation orders:** a summary shows the awarded sum, approved variations and the **revised contract sum**; an approved extra item can be added to the BOQ with one click so it can be measured and valued; the form no longer pre-fills invented values, numbers are VO-001 style, and the approval date is set when you approve.
+- **Interim payment certificates:** any number of certificates (the screen was fixed at four), price adjustment % per certificate (can be negative), retention release (capped at what is held, not taxed again), contract position (revised sum, certified to date and %, retention held, advance still to recover), and a **cumulative certificates register** with CSV download.
+Still open: escalation from price indices (base and current index formulas), materials on site, advance recovery schedules (fixed instalments), liquidated damages, variations that change the quantity of an existing item in the valuation, an approval workflow (who, when, status history), and a printable certificate register.
+
+### Found and fixed while doing P1
+- Undo and Redo in the header were decorative.
+- The IPC screen could only show four certificates, and its table had fixed text for 5% retention and 10% recovery.
+- Leftovers of the original regional version that the first conversion missed: a personal name used as the default approver and sample users, the national tax-ID field "PAN" (now Tax ID), a Kathmandu locality in an address default, two Devanagari print fonts (Kalimati, Nirmala UI), a Nepali sentence stored in legacy Preeti font encoding, and a sample project name with a person and river. The only remaining personal name is the author credit line, which I left untouched.
+
+---
+
+## UX & onboarding: feedback from a first-time user review
+
+A colleague reviewed the Measurement Book and BOQ screens and found the foundation comprehensive, with the MB-to-BOQ link especially useful. Their suggestions are about making the first hour easier. Each one was checked against the running app (desktop 1440 px and a phone-size 390 px screen) before being listed.
+
+**What the audit found**
+- **Desktop:** the header already shows the zone, the financial year, *Saved hh:mm* and a backup-age chip. It does not show the currency, the tax rate or the unit system; the currency appears only as "USD" inside the cards and table headings and can only be changed in Settings → Display. The Home screen lists nine "workflow modules" with no order or progress, and an empty project just shows "0 items".
+- **Phone (390 px):** the page scrolls sideways (570 px wide), 20 of the 38 visible buttons are smaller than 32 px, at least one table is wider than the screen, and the *Saved* indicator is hidden on small screens. On desktop 58 of the 65 controls on the BOQ screen are under 32 px, which is fine for a mouse and too small for touch.
+- **Already in place:** a saved indicator and a backup chip (P0 #4), a full backup and restore, a "Load Sample Civil Measurements" button, and a currency setting.
+
+| # | Suggestion | Today (audited) | Planned change | Priority | Effort |
+|---|---|---|---|---|---|
+| U1 | **"Start here" guide** through the usual flow: add norms or work items → enter measurements → sync quantities to the BOQ → review rates → export or print | None. First-time users land on Home with nine unordered modules | A short checklist that opens on first run and from Help. Each step shows live status (work items: 0, items measured: 3 of 12, rates reviewed, last export) and links straight to the screen. Dismissible, progress kept per project | P1 | M |
+| U2 | **Make the next step obvious on each screen**, especially the BOQ screen with its many options | Several equal-weight buttons, no recommendation | A numbered step bar (1 Norms, 2 Measure, 3 BOQ, 4 Rates, 5 Export) highlighting where you are, and one primary "Recommended next" button worked out from the project state (no items → add work items; items without measurements → enter measurements; measured but not synced → sync to BOQ; synced → review rates; reviewed → print / export) | P1 | M |
+| U3 | **Small editable sample project with a clear reset** | The sample button fills only the MB of the current project, and there is no reset | A complete sample project (items, rates, measurements, a contract and one payment certificate) created as its own project, labelled "Sample (safe to edit)", with a *Reset sample* button that restores it. It never touches real projects | P2 | M |
+| U4 | **Show units, currency, tax mode, zone and financial year together and let users check them before estimating** | Zone and FY in the header, "Office Mode" chip; currency only as text; tax rate and units not visible | An *Estimate settings* bar (Currency · Units · Tax mode and rate · Zone · FY), each part clickable to change. A "check before you start" step when a project is created that asks to confirm the currency and tax rate, and a visible "default, not confirmed" mark until the user does | P1 | S to M |
+| U5 | **Brief explanations and examples** for Norms, Resource Qty, Contract BOQ, Version Lock (and Office vs Contractor mode, Zone rates, MB, BOQ, IPC, Retention) | No explanation in the ribbon or the screens | A "?" next to each term with a one-sentence definition and a worked example, a Help → Glossary page, and a short hint on each empty screen | P1 | S |
+| U6 | **Clearer save and backup status** with last-saved time and a straightforward reminder | Desktop: shows *Saved hh:mm* and a passive "No backup yet" chip. Phone: hidden | Keep the indicator on small screens too; after 7 days or N changes show a dismissible reminder with a one-click *Back up now*; show the last backup time in the file menu | P1 | S |
+| U7 | **Check tables and controls on a phone and put the most-used actions within reach** | Fails the basics (see audit): sideways page scroll, tiny controls, wide tables | Responsive header (chips collapse into one menu), the ribbon becomes a bottom action bar with the most-used actions (Add item, Add measurement, Save, Undo, Export), tables scroll inside their own container with a fixed first column, 44 px touch targets in touch mode, the takeoff side panel becomes a bottom sheet | P2 (P1 if phones are a target) | L |
+| U8 | **Make the currency setting easy to find and confirm** | Only in Settings → Display; the dashboard shows "USD" with no way to change it from there | Covered by U4: a currency chip in the header that opens the setting, a currency choice when a project is created, and the currency shown in each BOQ and bill title. Later: a second "report currency" with a user-entered exchange rate (see P1 #9) | P1 | S |
+
+**Suggested order for these:** quick wins first (U5 glossary, U6 backup reminder, U4 + U8 settings bar and currency chip), then the guided flow (U1 Start here, U2 next-step bar), then the sample project (U3), and the phone pass (U7) as its own piece of work.
 
 ---
 
@@ -123,7 +160,8 @@ Rate-limit and authenticate the optional AI endpoints, validate request bodies, 
 
 ## Suggested order
 
-1. Tests (#1) and stable references (#2), because everything later builds on correct calculations.
+1. Done: tests, stable references, valuation screens, backups, Excel-like grid, contract depth (see the status table).
+2. Next: the quick UX wins (U4 to U6, U8), then the guided flow (U1, U2).
 2. Wire up valuation screens (#3) and backups (#4).
 3. DXF takeoff (#6) and takeoff polish (#7).
 4. Bundle splitting and table virtualization (#11), then the file refactor (#12).

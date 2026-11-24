@@ -5,17 +5,19 @@ import {
 } from 'lucide-react';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import {
-  Pt, ScaleInfo, TakeoffMeasurement, TakeoffSheet, Shape, SendAs, MBRowSpec,
+  Pt, ScaleInfo, TakeoffMeasurement, TakeoffSheet, Shape, SendAs, MBRowSpec, TakeoffRow, RowCol,
   deleteSheet, dist, listSheets, saveSheet,
 } from './takeoffStore';
 import {
   SHAPES, LENGTH_SHAPES, AREA_SHAPES, geometryOf, quantOf, buildRow, formatValue, sendOptions, shapeOf, M_TO_FT, Quant,
+  assembleRow, ROW_COLS, RowAssembly, unitDim, dimName,
 } from './takeoffGeometry';
 import { DxfModel, parseDxf } from './dxfModel';
 import { DxfViewer, DxfView } from './DxfViewer';
 import { CadPanel, CadAdd } from './CadPanel';
 import { ScalePanel, ScaleScope, scopePages } from './ScalePanel';
 import { LayersPanel, LayerRow } from './LayersPanel';
+import { RowsPanel, ActiveCol } from './RowsPanel';
 import { exportCsv, exportEvidencePng } from './evidence';
 
 export interface TakeoffItem { id: string; code: string; description: string; unit: string }
@@ -35,15 +37,6 @@ const PALETTE = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0d9488', '#db2777
 const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
 const isShapeTool = (t: Tool): t is Shape => t in SHAPES && t !== 'cad';
 
-/** dimensionality an item's unit expects: 0 count, 1 length, 2 area, 3 volume (null = unknown, e.g. kg, ls) */
-function unitDim(unit: string): number | null {
-  const u = unit.toLowerCase().replace(/[\s.\/]/g, '');
-  if (/^(sqm|m2|sqft|ft2|sqmtr|sqyd|sqmt)$/.test(u)) return 2;
-  if (/^(cum|m3|cuft|ft3|cumtr|cuyd|cumt)$/.test(u)) return 3;
-  if (/^(rm|rmt|m|mtr|lm|ft|rft|rmtr|km|lin?m|runningmeter|meter|metre)$/.test(u)) return 1;
-  if (/^(nos?|nr|each|ea|pcs?|set|sets|point|points)$/.test(u)) return 0;
-  return null;
-}
 /** dimensionality of what a measurement would write into the MB */
 function rowDim(m: TakeoffMeasurement, q: Quant): number {
   const b = m.b !== undefined && m.b !== 1 ? 1 : 0, h = m.h !== undefined && m.h !== 1 ? 1 : 0;
@@ -86,6 +79,8 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
   const [hiddenCad, setHiddenCad] = useState<Set<string>>(new Set());
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [activeRowId, setActiveRowId] = useState<string | null>(null);
+  const [activeCol, setActiveCol] = useState<ActiveCol | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pdfSvgRef = useRef<SVGSVGElement>(null);
@@ -100,6 +95,18 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
 
   const sheet = useMemo(() => sheets.find((s) => s.id === activeId) || null, [sheets, activeId]);
   const kind = sheet?.kind;
+  const rows: TakeoffRow[] = sheet?.rows || [];
+  const assemblies = useMemo(() => {
+    const out2: Record<string, RowAssembly> = {};
+    if (!sheet) return out2;
+    (sheet.rows || []).forEach((r) => {
+      const members = sheet.measurements.filter((x) => x.rowId === r.id).map((x) => ({ m: x, q: quantOf(x, sheet.pageScales[x.page], sheet.outUnit || 'm') }));
+      out2[r.id] = assembleRow(r, members, sheet.name, r.mbRowId || '');
+    });
+    return out2;
+  }, [sheet]);
+  const activeRow = rows.find((r) => r.id === activeRowId) || null;
+  const memberCount = (rowId: string) => (sheet ? sheet.measurements.filter((x) => x.rowId === rowId).length : 0);
   const isCad = kind === 'dxf';
   const numPages = isCad || kind === 'image' ? 1 : source?.numPages || 1;
   const mpp = sheet?.pageScales[page];
@@ -143,6 +150,7 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
   }, []);
 
   useEffect(() => {
+    setActiveRowId(null); setActiveCol(null);
     setSource(null); setCad(null); setLoadError(''); setPage(1); setDraft([]); setSelectedId(null); setCalibPts(null); setPicked(new Set()); setHiddenCad(new Set());
     if (!sheet || !isOpen) return;
     let cancelled = false;
@@ -289,10 +297,84 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
     if (selectedId === id) setSelectedId(null);
   };
 
-  const addMeasurement = (m: TakeoffMeasurement) => {
+  /** a new measurement joins the active takeoff row (count -> No., length -> the chosen column, area -> L x B) */
+  const withActiveRow = (m: TakeoffMeasurement): TakeoffMeasurement => {
+    if (!activeRow || m.type === 'angle') return m;
+    const colPick = activeCol && activeCol !== 'AREA' ? (activeCol as RowCol) : undefined;
+    let col: RowCol | undefined;
+    if (m.type === 'count') col = colPick ?? 'N';
+    else if (m.type === 'length') col = colPick ?? 'L';
+    const shape = m.shape;
+    return { ...m, rowId: activeRow.id, col, itemId: activeRow.itemId, sendAs: m.type === 'area' ? (shape === 'rect' || shape === 'rrect' ? 'LxB' : 'value') : m.sendAs };
+  };
+  const addMeasurement = (m0: TakeoffMeasurement) => {
+    const m = withActiveRow(m0);
     updateSheet((s) => withLayer({ ...s, measurements: [...s.measurements, m] }, layerKey(m)));
     setSelectedId(m.id);
+    if (m.rowId) flash(`Added to row "${activeRow?.label}"${m.col ? ` · column ${m.col}` : ''}. Continue with another column, or switch rows.`);
   };
+
+  // ---- takeoff rows ---------------------------------------------------------------------------------
+  const createRow = (itemId: string, label: string) => {
+    const r: TakeoffRow = { id: uid('trow'), itemId, label, manual: {}, autoSync: true };
+    updateSheet((s) => withLayer({ ...s, rows: [...(s.rows || []), r] }, itemId));
+    setActiveRowId(r.id); setActiveCol(null);
+    flash(`Row "${label}" created. Pick a column (No., L, B, H or Area) and measure on the drawing.`);
+  };
+  const patchRow = (id: string, patch: Partial<TakeoffRow>) =>
+    updateSheet((s) => ({ ...s, rows: (s.rows || []).map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
+  const setManual = (id: string, col: RowCol, v: number | undefined) =>
+    updateSheet((s) => ({ ...s, rows: (s.rows || []).map((r) => { if (r.id !== id) return r; const manual = { ...r.manual }; if (v === undefined) delete manual[col]; else manual[col] = v; return { ...r, manual }; }) }));
+  const pickCol = (c: ActiveCol) => {
+    setActiveCol(c);
+    if (c === 'N') setToolSafe('count');
+    else if (c === 'AREA') setToolSafe(lastArea);
+    else setToolSafe(lastLen);
+  };
+  const deleteRow = (id: string) => {
+    const r = rows.find((x) => x.id === id);
+    if (!r) return;
+    if (!window.confirm(`Delete the takeoff row "${r.label}"? Its measurements stay as separate measurements. ${r.mbRowId ? 'The MB row already created is not removed; delete it in the MB if you do not need it.' : ''}`)) return;
+    updateSheet((s) => ({ ...s, rows: (s.rows || []).filter((x) => x.id !== id), measurements: s.measurements.map((m) => (m.rowId === id ? { ...m, rowId: undefined, col: undefined } : m)) }));
+    if (activeRowId === id) { setActiveRowId(null); setActiveCol(null); }
+  };
+  const assignToRow = (mid: string, rowId: string) => {
+    const r = rows.find((x) => x.id === rowId);
+    const m = sheet?.measurements.find((x) => x.id === mid);
+    if (!m) return;
+    if (!r) { patchMeasurement(mid, { rowId: undefined, col: undefined }); return; }
+    patchMeasurement(mid, { rowId: r.id, itemId: r.itemId, col: m.type === 'count' ? 'N' : m.type === 'length' ? 'L' : undefined });
+  };
+  /** create the MB row of a takeoff row, or update it */
+  const pushRow = (r: TakeoffRow, quiet = false) => {
+    const a = assemblies[r.id];
+    if (!a || !ROW_COLS.some((c) => a.cols[c] !== null)) { if (!quiet) flash('Nothing measured or typed in this row yet.'); return; }
+    if (r.mbRowId) { onSyncRow(r.itemId, { ...a.spec, id: r.mbRowId }); if (!quiet) flash(`MB row "${r.label}" updated.`); }
+    else {
+      const id = uid(mode === 'estimate' ? 'mb_row' : 'vmb_row');
+      onApplyRow(r.itemId, { ...a.spec, id });
+      patchRow(r.id, { mbRowId: id });
+      if (!quiet) flash(`MB row "${r.label}" created.`);
+    }
+    syncedRef.current[r.id] = rowKey(a);
+  };
+  const rowKey = (a: RowAssembly) => JSON.stringify([a.spec.particulars, a.spec.no_of_units, a.spec.length, a.spec.breadth, a.spec.height]);
+  const syncedRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    // rows that were already sent when the drawing was opened count as in sync
+    syncedRef.current = {};
+    (sheet?.rows || []).forEach((r) => { const a = assemblies[r.id]; if (r.mbRowId && a) syncedRef.current[r.id] = rowKey(a); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet?.id]);
+  useEffect(() => {
+    (sheet?.rows || []).forEach((r) => {
+      const a = assemblies[r.id];
+      if (!r.autoSync || !a || !ROW_COLS.some((c) => a.cols[c] !== null)) return;
+      if (syncedRef.current[r.id] === rowKey(a)) return;
+      pushRow(r, true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assemblies]);
 
   const finishWith = useCallback((pts: Pt[], shape: Shape) => {
     if (!sheet) return;
@@ -305,7 +387,7 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
     });
     setDraft([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheet, page, deductMode, updateSheet]);
+  }, [sheet, page, deductMode, updateSheet, activeRowId, activeCol, rows]);
 
   const addCadMeasurement = (a: CadAdd) => {
     addMeasurement({
@@ -418,6 +500,7 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
   const quantFor = (m: TakeoffMeasurement) => quantOf(m, sheet?.pageScales[m.page], out);
   const sendMeasurement = (m: TakeoffMeasurement) => {
     if (!sheet) return;
+    if (m.rowId) { const r = rows.find((x) => x.id === m.rowId); if (r) pushRow(r); return; }
     if (!m.itemId) { flash('Choose the BOQ item first.'); return; }
     const row = buildRow(m, quantFor(m), sheet.name, uid(mode === 'estimate' ? 'mb_row' : 'vmb_row'));
     if (!row) { flash(m.type === 'angle' ? 'Angles are evidence only and are not sent to the MB.' : 'Set the scale for this page first.'); return; }
@@ -431,7 +514,7 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
     m.links.forEach((l) => { const row = buildRow(m, q, sheet.name, l.rowId); if (row) onSyncRow(l.itemId, row.spec); });
     flash(`Updated ${m.links.length} linked row(s).`);
   };
-  const pending = sheet ? sheet.measurements.filter((m) => m.itemId && m.type !== 'angle' && m.links.length === 0 && quantFor(m).value !== null) : [];
+  const pending = sheet ? sheet.measurements.filter((m) => !m.rowId && m.itemId && m.type !== 'angle' && m.links.length === 0 && quantFor(m).value !== null) : [];
 
   // ---- layers panel data + exports ---------------------------------------------------------------
   const layerRows: LayerRow[] = useMemo(() => {
@@ -467,13 +550,14 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
   };
   const doExportCsv = () => {
     if (!sheet) return;
-    const rows: (string | number)[][] = [['Sheet', 'Page', 'Item code', 'Item description', 'Item unit', 'Measurement', 'Shape', 'Type', 'Value', 'Value unit', 'Perimeter', 'Side A', 'Side B', 'Deduct', 'Slope factor', 'Waste %', 'Breadth factor', 'Height factor', 'Sent to MB (rows)', 'Scale', 'Note']];
+    const csv: (string | number)[][] = [['Row', 'Column', 'Sheet', 'Page', 'Item code', 'Item description', 'Item unit', 'Measurement', 'Shape', 'Type', 'Value', 'Value unit', 'Perimeter', 'Side A', 'Side B', 'Deduct', 'Slope factor', 'Waste %', 'Breadth factor', 'Height factor', 'Sent to MB (rows)', 'Scale', 'Note']];
     sheet.measurements.forEach((m) => {
       const q = quantFor(m); const it = items.find((i) => i.id === m.itemId);
       const vu = q.family === 'length' ? lenU : q.family === 'area' ? (out === 'ft' ? 'ft²' : 'm²') : q.family === 'angle' ? 'deg' : 'nos';
-      rows.push([sheet.name, m.page, it?.code || '', it?.description || '', it?.unit || '', m.label, SHAPES[shapeOf(m)].label, m.type, q.value === null ? '' : Number(q.value.toFixed(4)), vu, q.perimeter === null ? '' : Number(q.perimeter.toFixed(4)), q.dims ? Number(q.dims.a.toFixed(4)) : '', q.dims ? Number(q.dims.b.toFixed(4)) : '', m.deduct ? 'yes' : '', m.pitch ? Number((Math.sqrt(m.pitch.mode === 'ratio' ? 1 + m.pitch.value ** 2 : 1 / Math.cos((m.pitch.value * Math.PI) / 180) ** 2)).toFixed(4)) : '', m.waste || '', m.b ?? '', m.h ?? '', m.links.length, sheet.scaleInfo?.[m.page]?.label || '', m.note || '']);
+      const trow = rows.find((x) => x.id === m.rowId);
+      csv.push([trow?.label || '', m.rowId ? (m.col || (q.family === 'area' ? m.sendAs || 'value' : '')) : '', sheet.name, m.page, it?.code || '', it?.description || '', it?.unit || '', m.label, SHAPES[shapeOf(m)].label, m.type, q.value === null ? '' : Number(q.value.toFixed(4)), vu, q.perimeter === null ? '' : Number(q.perimeter.toFixed(4)), q.dims ? Number(q.dims.a.toFixed(4)) : '', q.dims ? Number(q.dims.b.toFixed(4)) : '', m.deduct ? 'yes' : '', m.pitch ? Number((Math.sqrt(m.pitch.mode === 'ratio' ? 1 + m.pitch.value ** 2 : 1 / Math.cos((m.pitch.value * Math.PI) / 180) ** 2)).toFixed(4)) : '', m.waste || '', m.b ?? '', m.h ?? '', m.links.length, sheet.scaleInfo?.[m.page]?.label || '', m.note || '']);
     });
-    exportCsv(rows, `takeoff_${sheet.name.replace(/\.[^.]+$/, '')}.csv`);
+    exportCsv(csv, `takeoff_${sheet.name.replace(/\.[^.]+$/, '')}.csv`);
   };
 
   // ---- overlay (shared drawing code, in drawing units; z = pixels per unit) -----------------------
@@ -542,7 +626,6 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
 
   if (!isOpen) return null;
 
-  const dimName = (d: number | null) => (d === 0 ? 'a count' : d === 1 ? 'a length' : d === 2 ? 'an area' : d === 3 ? 'a volume' : 'a quantity');
   const zoomBy = (k: number) => {
     userZoomed.current = true;
     if (isCad) {
@@ -559,13 +642,15 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
     </button>
   );
   const activeShape = isShapeTool(tool) ? tool : null;
-  const hint =
+  const rowCtx = activeRow ? `Row “${activeRow.label}”${activeCol ? ` · column ${activeCol === 'AREA' ? 'Area (L×B)' : activeCol}` : ''}: ` : '';
+  const hint0 =
     !sheet ? 'Open a PDF, DXF (CAD) or image drawing to begin.'
     : tool === 'calibrate' ? (calibPts?.length === 1 ? 'Click the second end of the known dimension (Shift = straight).' : 'Click the first end of a dimension you know.')
     : activeShape ? SHAPES[activeShape].hint + (draft.length ? ' · Backspace removes the last point · Esc cancels.' : '')
     : tool === 'pick' ? 'Click CAD entities to pick them (Shift = add more), then add their total length / area.'
     : tool === 'pan' ? 'Drag to pan, wheel to zoom.'
     : 'Select a measurement on the drawing or in the list.';
+  const hint = rowCtx + hint0;
 
   const scaleChip = (
     <button onClick={() => setScaleOpen((o) => !o)} data-testid="scale-chip"
@@ -723,7 +808,7 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
 
           {/* right panel */}
           <div className="w-[430px] shrink-0 border-l bg-white flex flex-col min-h-0">
-            <div className="overflow-y-auto" style={{ maxHeight: '45%' }}>
+            <div className="overflow-y-auto" style={{ maxHeight: '28%' }}>
               {isCad && cad && sheet && (
                 <CadPanel
                   model={cad} mpp={mpp} out={out} hidden={hiddenCad}
@@ -736,6 +821,18 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
                 <LayersPanel rows={layerRows} onToggle={toggleLayer} onIsolate={isolateLayer} onShowAll={showAllLayers} onColor={cycleColor} onExportPng={doExportPng} onExportCsv={doExportCsv} exporting={exporting} />
               )}
             </div>
+            {sheet && (
+              <div className="overflow-y-auto" style={{ maxHeight: '42%' }}>
+                <RowsPanel
+                  rows={rows} items={items} assemblies={assemblies} activeRowId={activeRowId} activeCol={activeCol}
+                  onActivate={(id) => { setActiveRowId(id); setActiveCol(null); }}
+                  onCreate={createRow} onPickCol={pickCol} onManual={setManual}
+                  onToggleAuto={(id) => { const r = rows.find((x) => x.id === id); if (r) patchRow(id, { autoSync: !r.autoSync }); }}
+                  onSend={(id) => { const r = rows.find((x) => x.id === id); if (r) pushRow(r); }}
+                  onDelete={deleteRow} memberCount={memberCount}
+                />
+              </div>
+            )}
             <div className="px-3 py-2 border-y flex items-center justify-between bg-slate-50">
               <div className="font-bold text-sm text-slate-800">Measurements ({sheet?.measurements.length || 0})</div>
               <div className="flex gap-1.5">
@@ -759,7 +856,7 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
                 const row = sheet && m.itemId ? buildRow(m, q, sheet.name, 'preview') : null;
                 const idim = item ? unitDim(item.unit) : null;
                 const rdim = rowDim(m, q);
-                const warn = row && idim !== null && idim !== rdim ? `Unit check: ${item!.unit} expects ${dimName(idim)}, but this writes ${dimName(rdim)}. Change “Send as”, or add Breadth / Height.` : '';
+                const warn = row && !m.rowId && idim !== null && idim !== rdim ? `Unit check: ${item!.unit} expects ${dimName(idim)}, but this writes ${dimName(rdim)}. Change “Send as”, or add Breadth / Height.` : '';
                 return (
                   <div key={m.id} onClick={() => { setSelectedId(m.id); if (m.page !== page) setPage(m.page); }} className={`rounded-xl border p-2 text-xs space-y-1.5 cursor-pointer ${sel ? 'border-blue-500 bg-blue-50' : 'border-slate-200'}`} data-testid="takeoff-row">
                     <div className="flex items-center gap-1.5">
@@ -776,12 +873,26 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
                       <span>page {m.page}</span>
                     </div>
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      <select data-testid="takeoff-item" value={m.itemId || ''} onChange={(e) => patchMeasurement(m.id, { itemId: e.target.value || undefined })} className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-1">
+                      <select data-testid="takeoff-item" disabled={!!m.rowId} title={m.rowId ? 'The item comes from the takeoff row' : undefined} value={m.itemId || ''} onChange={(e) => patchMeasurement(m.id, { itemId: e.target.value || undefined })} className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-1">
                         <option value="">Assign to BOQ item…</option>
                         {items.map((i) => <option key={i.id} value={i.id}>{i.code} · {i.description.slice(0, 40)} ({i.unit})</option>)}
                       </select>
                       <label className="flex items-center gap-1 text-red-700 whitespace-nowrap"><input type="checkbox" checked={m.deduct} onChange={(e) => patchMeasurement(m.id, { deduct: e.target.checked })} />Ded.</label>
                     </div>
+                    {rows.length > 0 && q.family !== 'angle' && (
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-slate-500 whitespace-nowrap">In row</span>
+                        <select data-testid="takeoff-row-select" value={m.rowId || ''} onChange={(e) => assignToRow(m.id, e.target.value)} className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-1">
+                          <option value="">Its own MB row</option>
+                          {rows.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                        </select>
+                        {m.rowId && q.family !== 'area' && (
+                          <select data-testid="takeoff-col-select" value={m.col || (q.family === 'count' ? 'N' : 'L')} onChange={(e) => patchMeasurement(m.id, { col: e.target.value as RowCol })} className="border border-slate-200 rounded px-1 py-1" title="The column of the row this measurement feeds">
+                            {ROW_COLS.map((c) => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        )}
+                      </div>
+                    )}
                     {opts.length > 0 && (
                       <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <span className="text-slate-500 whitespace-nowrap">Send as</span>
@@ -805,15 +916,16 @@ export const TakeoffModal: React.FC<Props> = ({ isOpen, onClose, mode, projectKe
                         </div>
                       )}
                     </div>
-                    {row && <div className="text-[10px] font-mono text-slate-600 bg-slate-50 rounded px-1.5 py-1" data-testid="takeoff-preview">→ {row.text} = <b>{row.qty.toFixed(3)}</b> {item?.unit}</div>}
+                    {row && !m.rowId && <div className="text-[10px] font-mono text-slate-600 bg-slate-50 rounded px-1.5 py-1" data-testid="takeoff-preview">→ {row.text} = <b>{row.qty.toFixed(3)}</b> {item?.unit}</div>}
                     {warn && <div className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-1" data-testid="takeoff-warn">{warn}</div>}
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                       {m.links.length > 0 && <span className="text-emerald-700 font-bold text-[10px]">✓ in MB ({m.links.length})</span>}
+                      {m.rowId && <span className="text-indigo-700 font-bold text-[10px]" data-testid="takeoff-in-row">→ row “{rows.find((x) => x.id === m.rowId)?.label}”{m.col ? ` · ${m.col}` : ''}</span>}
                       <span className="flex-1" />
                       {m.links.length > 0 && (
                         <button onClick={() => syncMeasurement(m)} className="flex items-center gap-1 px-2 py-1 rounded-lg border border-indigo-300 text-indigo-700 font-bold" title="Push the current values to the MB rows created from this measurement"><RefreshCw className="w-3 h-3" /> Update {m.links.length}</button>
                       )}
-                      {m.type !== 'angle' && <button data-testid="takeoff-send" onClick={() => sendMeasurement(m)} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white font-bold"><Send className="w-3 h-3" /> {m.links.length ? 'Add again' : 'Send to MB'}</button>}
+                      {m.type !== 'angle' && <button data-testid="takeoff-send" onClick={() => sendMeasurement(m)} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white font-bold"><Send className="w-3 h-3" /> {m.rowId ? 'Update row' : m.links.length ? 'Add again' : 'Send to MB'}</button>}
                     </div>
                   </div>
                 );

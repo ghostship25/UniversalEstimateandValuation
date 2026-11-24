@@ -3,6 +3,10 @@ import { createPortal } from 'react-dom';
 import { calcQuantityVal } from '../services/rateEngine';
 import { parseNumericText } from '../services/mbCellValue';
 import {
+  GridPos, registerCell, neighbor, focusCell, setActive, getActive, getSelection, setSelection, clearSelection, isSelected,
+  isMultiSelection, copySelection, clearSelectionCells, pasteBlock, fillSelectionWith, fillDown, useGridVersion,
+} from '../services/gridNav';
+import {
   LinkTarget,
   PointSession,
   buildRef,
@@ -67,6 +71,18 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
   const pendingCaretRef = useRef<number | null>(null);
   const sessionRef = useRef<PointSession | null>(null);
   const cancelledRef = useRef(false);
+  const STD_COL: Record<string, number> = { no_of_units: 0, length: 1, breadth: 2, height: 3 };
+  const gridPos: GridPos | null =
+    linkTarget && linkTarget.rowIdx !== null && !isReadOnly && !isCalculated && !isDisabled && (linkTarget.col ?? STD_COL[String(linkTarget.prop)]) !== undefined
+      ? { item: linkTarget.itemIdx, row: linkTarget.rowIdx, col: (linkTarget.col ?? STD_COL[String(linkTarget.prop)]) as number }
+      : null;
+  const valueRef = useRef(value);
+  const lastCommittedRef = useRef<string | null>(null);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useGridVersion(); // re-render when the range selection changes
+  const inSelection = !!gridPos && isSelected(gridPos);
   usePointingVersion(); // re-render when a formula is being pointed so highlights stay in sync
 
   const getEvaluatedDisplay = (val: number | string): string => {
@@ -112,6 +128,8 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
   };
 
   const handleFocus = () => {
+    if (gridPos) { setActive(gridPos); if (!isMultiSelection() || !isSelected(gridPos)) clearSelection(); }
+    lastCommittedRef.current = null;
     setIsEditing(true);
     // Show raw formula string when focused for editing
     updateDraft(String(value ?? ''));
@@ -161,8 +179,33 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
 
   useEffect(() => () => endSession(), []);
 
+  const lastValueRef = useRef<string>(String(value ?? ''));
+  useEffect(() => {
+    const now = String(value ?? '');
+    if (isEditing && draftRef.current === lastValueRef.current && now !== lastValueRef.current) updateDraft(now);
+    lastValueRef.current = now;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  // register this cell so keyboard navigation, copy / paste and fill can reach it
+  useEffect(() => {
+    if (!gridPos) return;
+    return registerCell(gridPos, {
+      set: (rawText) => onChangeRef.current?.(parseFormulaOrValue(rawText)),
+      get: () => String(valueRef.current ?? ''),
+      focus: () => { const el = inputRef.current; if (el) { el.focus(); window.setTimeout(() => el.select(), 0); } },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gridPos?.item, gridPos?.row, gridPos?.col]);
+
   // Clicking this cell while another cell's formula is waiting for an operand inserts a reference.
   const handlePointMouseDown = (e: React.MouseEvent) => {
+    if (gridPos && e.shiftKey && getActive() && getActive()!.item === gridPos.item && !formulaPointing.getSession()?.canPoint()) {
+      e.preventDefault(); e.stopPropagation();
+      const sel = getSelection();
+      setSelection(sel ? sel.anchor : getActive()!, gridPos);
+      return;
+    }
     if (!linkTarget) return;
     const s = formulaPointing.getSession();
     if (!s || sameTarget(s.origin, linkTarget) || !s.canPoint()) return;
@@ -207,21 +250,92 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
     setIsEditing(false);
     endSession();
     const parsed = parseFormulaOrValue(draftRef.current || displayInput);
+    // nothing changed (or this exact value was just committed by Enter and again by the blur): not an edit
+    if (String(parsed) === String(valueRef.current ?? '') || lastCommittedRef.current === String(parsed)) return;
+    lastCommittedRef.current = String(parsed);
     onChange?.(parsed);
   };
 
+  const moveTo = (p: GridPos | null) => { handleCommit(); if (!focusCell(p)) inputRef.current?.blur(); };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key;
+    const draft = draftRef.current;
+    const isFormulaDraft = draft.trim().startsWith('=');
+    const unchanged = draft === String(value ?? '');
+
+    // undo / redo: with nothing typed in this cell, Ctrl+Z / Ctrl+Y act on the document
+    if (mod && !e.altKey && (key.toLowerCase() === 'z' || key.toLowerCase() === 'y') && unchanged) {
       e.preventDefault();
+      window.dispatchEvent(new CustomEvent('uev:history', { detail: key.toLowerCase() === 'y' || e.shiftKey ? 'redo' : 'undo' }));
+      return;
+    }
+    if (gridPos) {
+      if (mod && key.toLowerCase() === 'd') { e.preventDefault(); fillDown(gridPos); return; }
+      // Shift + arrows extend a range selection from the active cell
+      if (e.shiftKey && !mod && !isFormulaDraft && key.startsWith('Arrow')) {
+        e.preventDefault();
+        const sel = getSelection();
+        const from = sel ? sel.focus : gridPos;
+        const d = key === 'ArrowDown' ? [1, 0] : key === 'ArrowUp' ? [-1, 0] : key === 'ArrowRight' ? [0, 1] : [0, -1];
+        const nxt = neighbor(from, d[0], d[1]);
+        if (nxt) setSelection(sel ? sel.anchor : gridPos, nxt);
+        return;
+      }
+      if (isMultiSelection() && (key === 'Delete' || key === 'Backspace') && !mod) { e.preventDefault(); clearSelectionCells(); return; }
+      if (key === 'Tab') { e.preventDefault(); clearSelection(); moveTo(neighbor(gridPos, 0, e.shiftKey ? -1 : 1, true)); return; }
+      if (!isFormulaDraft && !mod && !e.shiftKey && (key === 'ArrowDown' || key === 'ArrowUp')) { e.preventDefault(); clearSelection(); moveTo(neighbor(gridPos, key === 'ArrowDown' ? 1 : -1, 0)); return; }
+      const el = inputRef.current;
+      if (!isFormulaDraft && !mod && !e.shiftKey && el && (key === 'ArrowRight' || key === 'ArrowLeft')) {
+        const atEnd = el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
+        const atStart = el.selectionStart === 0 && el.selectionEnd === 0;
+        if ((key === 'ArrowRight' && atEnd) || (key === 'ArrowLeft' && atStart)) { e.preventDefault(); clearSelection(); moveTo(neighbor(gridPos, 0, key === 'ArrowRight' ? 1 : -1)); return; }
+      }
+    }
+    if (key === 'Enter') {
+      e.preventDefault();
+      clearSelection();
       handleCommit();
-      inputRef.current?.blur();
-    } else if (e.key === 'Escape') {
+      const nxt = gridPos ? neighbor(gridPos, e.shiftKey ? -1 : 1, 0) : null;
+      if (!focusCell(nxt)) inputRef.current?.blur();
+    } else if (key === 'Escape') {
       cancelledRef.current = true;
       draftRef.current = String(value ?? '');
       setIsEditing(false);
       endSession();
+      clearSelection();
       setDisplayInput(getEvaluatedDisplay(value));
       inputRef.current?.blur();
+    }
+  };
+
+  const handleCopy = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    if (!gridPos || !isMultiSelection()) return;
+    const text = copySelection();
+    if (text === null) return;
+    e.preventDefault();
+    e.clipboardData.setData('text/plain', text);
+  };
+  const handleCut = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    if (!gridPos || !isMultiSelection()) return;
+    handleCopy(e);
+    clearSelectionCells();
+  };
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    if (!gridPos) return;
+    const text = e.clipboardData.getData('text/plain');
+    const multiCell = /[\t\n]/.test(text.replace(/\r?\n$/, ''));
+    const sel = getSelection();
+    if (multiCell) {
+      e.preventDefault();
+      const start = sel && isMultiSelection()
+        ? { item: sel.anchor.item, row: Math.min(sel.anchor.row, sel.focus.row), col: Math.min(sel.anchor.col, sel.focus.col) }
+        : gridPos;
+      pasteBlock(text, start);
+    } else if (isMultiSelection() && text.trim() !== '') {
+      e.preventDefault();
+      fillSelectionWith(text.trim());
     }
   };
 
@@ -276,10 +390,14 @@ export const SpreadsheetCell: React.FC<SpreadsheetCellProps> = ({
         onFocus={handleFocus}
         onBlur={handleCommit}
         onKeyDown={handleKeyDown}
+        onCopy={handleCopy}
+        onCut={handleCut}
+        onPaste={handlePaste}
+        data-gcell={gridPos ? `${gridPos.item}:${gridPos.row}:${gridPos.col}` : undefined}
         placeholder={placeholder}
         className={`w-full p-1.5 font-mono text-xs text-slate-900 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 font-bold transition shadow-2xs ${
           isDisabled ? 'bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed' : ''
-        } ${isFormula ? 'text-emerald-800 bg-emerald-50/40' : ''} ${className}`}
+        } ${isFormula ? 'text-emerald-800 bg-emerald-50/40' : ''} ${inSelection ? 'ring-2 ring-blue-500 bg-blue-100' : ''} ${className}`}
       />
       {isEditing && displayInput.trim().startsWith('=') && typeof document !== 'undefined' &&
         createPortal(

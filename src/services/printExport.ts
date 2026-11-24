@@ -27,7 +27,7 @@ export function downloadPrintableHTML(options: PrintExportOptions) {
   <title>${options.title} - ${options.projectTitle}</title>
   <style>
     @page { size: A4 ${pageOrientation}; margin: 10mm; }
-    body { font-family: 'Kalimati', 'Nirmala UI', 'Segoe UI', Tahoma, sans-serif; color: #000; margin: 0; padding: 10px; background: #fff; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; color: #000; margin: 0; padding: 10px; background: #fff; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: ${pageOrientation === 'portrait' ? '8.5pt' : '9.5pt'}; table-layout: auto; }
     th, td { border: 1px solid #000 !important; padding: ${pageOrientation === 'portrait' ? '4px 6px' : '5px 7px'}; text-align: left; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; }
     th { background-color: #f1f5f9 !important; color: #000 !important; font-weight: bold; text-align: center; vertical-align: middle; }

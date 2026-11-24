@@ -1,5 +1,5 @@
 // Pure geometry + quantity rules for takeoff measurements (no React, fully unit-testable).
-import type { Pt, Pitch, SendAs, Shape, TakeoffMeasurement, TakeoffToolType, MBRowSpec } from './takeoffStore';
+import type { Pt, Pitch, SendAs, Shape, TakeoffMeasurement, TakeoffToolType, MBRowSpec, RowCol, TakeoffRow } from './takeoffStore';
 import { dist, polygonArea, polylineLength } from './takeoffStore';
 import { computeRowBaseQuantity } from '../../services/mbDependencyEngine';
 
@@ -239,7 +239,8 @@ export function buildRow(m: TakeoffMeasurement, q: Quant, sheetName: string, row
     remarks: `Takeoff: ${sheetName} · ${SHAPES[shape].label}${extras.length ? ' · ' + extras.join(', ') : ''}`,
     takeoff_id: m.id,
   };
-  const qty = computeRowBaseQuantity({ no: spec.no_of_units, l: spec.length, b: spec.breadth, h: spec.height }, { no: true, l: true, b: true, h: true });
+  const nz = (x: number | '') => (x === '' ? null : x);
+  const qty = computeRowBaseQuantity({ no: nz(spec.no_of_units), l: nz(spec.length), b: nz(spec.breadth), h: nz(spec.height) }, { no: true, l: true, b: true, h: true });
   const text = `N ${spec.no_of_units} · L ${spec.length} · B ${spec.breadth} · H ${spec.height}`;
   return { spec, qty, text };
 }
@@ -251,4 +252,85 @@ export function formatValue(q: Quant, out: 'm' | 'ft'): string {
   if (q.family === 'angle') return `${q.value.toFixed(1)}°`;
   const v = Math.abs(q.value) > 0 && Math.abs(q.value) < 0.01 ? q.value.toPrecision(3) : q.value.toFixed(3);
   return `${v} ${q.family === 'length' ? (out === 'ft' ? 'ft' : 'm') : out === 'ft' ? 'ft²' : 'm²'}`;
+}
+
+
+// ---- takeoff rows: one MB row built from several measurements ------------------------------------
+export const ROW_COLS: RowCol[] = ['N', 'L', 'B', 'H'];
+export const COL_NAME: Record<RowCol, string> = { N: 'No.', L: 'Length', B: 'Breadth', H: 'Height' };
+
+/** what a measurement writes into the columns of its row (slope, waste and deduction are applied to the first column) */
+export function contribution(m: TakeoffMeasurement, q: Quant): Partial<Record<RowCol, number>> | null {
+  if (q.value === null || q.family === 'angle') return null;
+  const f = pitchFactor(m.pitch) * wasteFactor(m.waste) * (m.deduct ? -1 : 1);
+  if (q.family === 'count') return { [m.col ?? 'N']: q.value * f };
+  if (q.family === 'length') return { [m.col ?? 'L']: q.value * f };
+  const s: SendAs = m.sendAs || 'value';
+  const d = q.dims;
+  if (s === 'perimeter' && q.perimeter !== null) return { L: q.perimeter * f };
+  if (s === 'LxB' && d) return { L: d.a * f, B: d.b };
+  if (s === 'BxL' && d) return { L: d.b * f, B: d.a };
+  if (s === 'LxH' && d) return { L: d.a * f, H: d.b };
+  return { L: q.value * f };
+}
+
+/** dimensionality an item's unit expects: 0 count, 1 length, 2 area, 3 volume (null = unknown, e.g. kg, lump sum) */
+export function unitDim(unit: string): number | null {
+  const u = unit.toLowerCase().replace(/[\s.\/]/g, '');
+  if (/^(sqm|m2|sqft|ft2|sqmtr|sqyd|sqmt)$/.test(u)) return 2;
+  if (/^(cum|m3|cuft|ft3|cumtr|cuyd|cumt)$/.test(u)) return 3;
+  if (/^(rm|rmt|m|mtr|lm|ft|rft|rmtr|km|linm|runningmeter|meter|metre)$/.test(u)) return 1;
+  if (/^(nos?|nr|each|ea|pcs?|set|sets|point|points)$/.test(u)) return 0;
+  return null;
+}
+export const dimName = (d: number | null) => (d === 0 ? 'a count' : d === 1 ? 'a length' : d === 2 ? 'an area' : d === 3 ? 'a volume' : 'a quantity');
+
+export interface RowAssembly {
+  /** how many lengths multiply in this row (L, B, H that are filled; an area written as one value counts as two) */
+  dim: number;
+  cols: Record<RowCol, number | null>;
+  /** measurement ids feeding each column */
+  sources: Record<RowCol, string[]>;
+  /** column filled from a typed value (no measurement feeds it) */
+  typed: Record<RowCol, boolean>;
+  qty: number;
+  spec: MBRowSpec;
+  text: string;
+  warnings: string[];
+}
+const r3b = (n: number) => Math.round(n * 1000) / 1000;
+
+/** Build the MB row of a takeoff row. Several measurements into one column add up (runs of the same item);
+ *  a column nobody feeds uses its typed value or stays blank (skipped in the quantity). */
+export function assembleRow(row: TakeoffRow, members: { m: TakeoffMeasurement; q: Quant }[], sheetName: string, mbRowId: string): RowAssembly {
+  const sums: Record<RowCol, number | null> = { N: null, L: null, B: null, H: null };
+  const sources: Record<RowCol, string[]> = { N: [], L: [], B: [], H: [] };
+  const typed: Record<RowCol, boolean> = { N: false, L: false, B: false, H: false };
+  const warnings: string[] = [];
+  let twoDim = 0;
+  members.forEach(({ m, q }) => {
+    const c = contribution(m, q);
+    if (!c) return;
+    const keys = Object.keys(c) as RowCol[];
+    if (keys.length > 1) twoDim++;
+    keys.forEach((k) => { sums[k] = (sums[k] ?? 0) + (c[k] as number); sources[k].push(m.id); });
+  });
+  if (twoDim > 1) warnings.push('Several area measurements feed one row: their sides would be added before multiplying. Put each area in its own row.');
+  ROW_COLS.forEach((k) => {
+    if (sums[k] === null && row.manual[k] !== undefined && Number.isFinite(row.manual[k] as number)) { sums[k] = row.manual[k] as number; typed[k] = true; }
+  });
+  const v = (k: RowCol): number | '' => (sums[k] === null ? '' : r3b(sums[k] as number));
+  const spec: MBRowSpec = {
+    id: mbRowId,
+    particulars: row.label,
+    no_of_units: v('N'), length: v('L'), breadth: v('B'), height: v('H'),
+    remarks: `Takeoff: ${sheetName} · ${members.length} measurement${members.length === 1 ? '' : 's'}`,
+    takeoff_id: row.id,
+  };
+  const areaAsValue = members.filter(({ m, q }) => q.family === 'area' && (m.sendAs || 'value') === 'value' && q.value !== null).length;
+  const dim = (['L', 'B', 'H'] as RowCol[]).filter((k) => sums[k] !== null).length + (areaAsValue ? 1 : 0);
+  const nn = (x: number | '') => (x === '' ? null : x);
+  const qty = computeRowBaseQuantity({ no: nn(spec.no_of_units), l: nn(spec.length), b: nn(spec.breadth), h: nn(spec.height) }, { no: true, l: true, b: true, h: true });
+  const show = (x: number | '') => (x === '' ? '–' : x);
+  return { dim, cols: sums, sources, typed, qty, spec, warnings, text: `N ${show(spec.no_of_units)} · L ${show(spec.length)} · B ${show(spec.breadth)} · H ${show(spec.height)}` };
 }
