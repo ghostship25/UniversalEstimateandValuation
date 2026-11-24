@@ -52,7 +52,7 @@ describe('takeoff quantities and MB rows (0.1 m per unit: 120 x 80 units = 12 x 
   });
   it('slope and waste are carried in the No. column', () => {
     const r = buildRow({ ...rect, pitch: { mode: 'ratio', value: 0.75 }, waste: 10 }, q, 's', 'r')!;
-    near(r.spec.no_of_units, 1.375, 1e-4); near(r.qty, 96 * 1.375, 1e-2);
+    near(Number(r.spec.no_of_units), 1.375, 1e-4); near(r.qty, 96 * 1.375, 1e-2);
   });
   it('an empty extra factor is not used; a typed 0 gives 0', () => {
     near(buildRow({ ...rect, h: undefined, b: undefined }, q, 's', 'r')!.qty, 96);
@@ -81,5 +81,85 @@ describe('legacy PDF takeoff row conversion', () => {
       remarks: 'Takeoff: Plan.pdf p.2',
       takeoff_id: 'm1',
     });
+  });
+});
+
+import { assembleRow, contribution } from '../src/modules/takeoff/takeoffGeometry';
+import type { TakeoffRow } from '../src/modules/takeoff/takeoffStore';
+
+describe('takeoff rows: one MB row from several measurements', () => {
+  const row: TakeoffRow = { id: 'row1', itemId: 'i1', label: 'Footing F1', manual: {}, autoSync: true };
+  const m = (id: string, type: any, shape: any, points: any[], extra: any = {}): TakeoffMeasurement => ({ id, page: 1, type, shape, label: id, points, deduct: false, links: [], rowId: 'row1', ...extra });
+  const mk = (x: TakeoffMeasurement) => ({ m: x, q: quantOf(x, 0.1, 'm') }); // 0.1 m per unit
+  const count = m('c', 'count', 'count', [P(0, 0), P(1, 1), P(2, 2), P(3, 3)]);              // 4 nos
+  const lengthL = m('l', 'length', 'line', [P(0, 0), P(30, 0)], { col: 'L' });                // 3 m
+  const lengthB = m('b', 'length', 'line', [P(0, 0), P(0, 12)], { col: 'B' });                // 1.2 m
+  it('a count goes to No., lengths go to the column they were measured for', () => {
+    const a = assembleRow(row, [mk(count), mk(lengthL), mk(lengthB)], 'p.pdf', 'mb1');
+    expect(a.cols.N).toBe(4); expect(a.cols.L).toBeCloseTo(3, 9); expect(a.cols.B).toBeCloseTo(1.2, 9); expect(a.cols.H).toBeNull();
+    expect(a.spec).toMatchObject({ no_of_units: 4, length: 3, breadth: 1.2, height: '' });
+    expect(a.qty).toBeCloseTo(14.4, 6);                 // 4 x 3 x 1.2, the blank height is skipped
+  });
+  it('only one column measured is fine: the others stay blank', () => {
+    const a = assembleRow(row, [mk(count)], 'p.pdf', 'mb1');
+    expect(a.spec).toMatchObject({ no_of_units: 4, length: '', breadth: '', height: '' });
+    expect(a.qty).toBe(4);
+  });
+  it('a typed value fills a column that is not measured; a measurement wins over it', () => {
+    const typed = { ...row, manual: { H: 0.5, L: 99 } };
+    const a = assembleRow(typed, [mk(lengthL)], 'p.pdf', 'mb1');
+    expect(a.cols.L).toBe(3); expect(a.cols.H).toBe(0.5); expect(a.typed).toMatchObject({ L: false, H: true });
+  });
+  it('a typed 0 multiplies, like in the MB', () => expect(assembleRow({ ...row, manual: { N: 2, H: 0 } }, [mk(lengthL)], 'p.pdf', 'mb1').qty).toBe(0));
+  it('several lengths into one column add up (runs of the same item)', () => {
+    const l2 = m('l2', 'length', 'line', [P(0, 0), P(20, 0)], { col: 'L' });
+    expect(assembleRow(row, [mk(lengthL), mk(l2)], 'p.pdf', 'mb1').cols.L).toBe(5);
+  });
+  it('a deduction subtracts from its column', () => {
+    const d = m('d', 'length', 'line', [P(0, 0), P(10, 0)], { col: 'L', deduct: true });
+    expect(assembleRow(row, [mk(lengthL), mk(d)], 'p.pdf', 'mb1').cols.L).toBe(2);
+  });
+  it('a rectangle fills L and B; perimeter and area-as-value fill L', () => {
+    const rect = m('r', 'area', 'rect', [P(0, 0), P(120, 80)], { sendAs: 'LxB' });             // 12 x 8 m
+    expect(assembleRow(row, [mk(rect)], 'p.pdf', 'mb1').cols).toMatchObject({ L: 12, B: 8 });
+    expect(assembleRow(row, [mk({ ...rect, sendAs: 'perimeter' })], 'p.pdf', 'mb1').cols).toMatchObject({ L: 40, B: null });
+    expect(assembleRow(row, [mk({ ...rect, sendAs: 'value' })], 'p.pdf', 'mb1').cols.L).toBe(96);
+    expect(assembleRow(row, [mk({ ...rect, sendAs: 'LxH' })], 'p.pdf', 'mb1').cols).toMatchObject({ L: 12, H: 8 });
+  });
+  it('a rectangle plus a height measured as a length gives a volume', () => {
+    const rect = m('r', 'area', 'rect', [P(0, 0), P(120, 80)], { sendAs: 'LxB' });
+    const h = m('h', 'length', 'line', [P(0, 0), P(0, 5)], { col: 'H' });                      // 0.5 m
+    expect(assembleRow(row, [mk(rect), mk(h)], 'p.pdf', 'mb1').qty).toBeCloseTo(48, 6);
+  });
+  it('warns when several areas would be multiplied together', () => {
+    const r1 = m('r1', 'area', 'rect', [P(0, 0), P(10, 10)], { sendAs: 'LxB' }), r2 = m('r2', 'area', 'rect', [P(0, 0), P(20, 20)], { sendAs: 'LxB' });
+    expect(assembleRow(row, [mk(r1), mk(r2)], 'p.pdf', 'mb1').warnings.length).toBe(1);
+  });
+  it('angles and unscaled lengths contribute nothing', () => {
+    expect(contribution(lengthL, quantOf(lengthL, undefined, 'm'))).toBeNull();
+    const ang = m('a', 'angle', 'angle', [P(1, 0), P(0, 0), P(0, 1)]);
+    expect(contribution(ang, quantOf(ang, 0.1, 'm'))).toBeNull();
+  });
+});
+
+import { unitDim } from '../src/modules/takeoff/takeoffGeometry';
+describe('unit dimensionality and row dimension', () => {
+  it('reads the dimension an item unit expects', () => {
+    expect(unitDim('Cu.m.')).toBe(3); expect(unitDim('Sq.m.')).toBe(2); expect(unitDim('R.m.')).toBe(1);
+    expect(unitDim('m')).toBe(1); expect(unitDim('Nos.')).toBe(0); expect(unitDim('kg')).toBeNull();
+  });
+  it('counts the lengths that multiply in a row', () => {
+    const row2: TakeoffRow = { id: 'r', itemId: 'i', label: 'x', manual: {}, autoSync: true };
+    const mm = (id: string, type: any, shape: any, pts: any[], extra: any = {}): TakeoffMeasurement => ({ id, page: 1, type, shape, label: id, points: pts, deduct: false, links: [], rowId: 'r', ...extra });
+    const mk2 = (x: TakeoffMeasurement) => ({ m: x, q: quantOf(x, 0.1, 'm') });
+    const count = mm('c', 'count', 'count', [P(0, 0)]);
+    const L = mm('l', 'length', 'line', [P(0, 0), P(30, 0)], { col: 'L' });
+    const B = mm('b', 'length', 'line', [P(0, 0), P(0, 12)], { col: 'B' });
+    const rect = mm('r', 'area', 'rect', [P(0, 0), P(120, 80)], { sendAs: 'LxB' });
+    const areaVal = mm('a', 'area', 'polygon', [P(0, 0), P(10, 0), P(10, 10)], { sendAs: 'value' });
+    expect(assembleRow(row2, [mk2(count)], 's', 'x').dim).toBe(0);
+    expect(assembleRow(row2, [mk2(count), mk2(L), mk2(B)], 's', 'x').dim).toBe(2);
+    expect(assembleRow({ ...row2, manual: { H: 0.5 } }, [mk2(rect)], 's', 'x').dim).toBe(3);   // L, B from the rectangle + typed H
+    expect(assembleRow(row2, [mk2(areaVal)], 's', 'x').dim).toBe(2);                          // an area written as one value is 2D
   });
 });

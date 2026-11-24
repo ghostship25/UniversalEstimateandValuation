@@ -8,7 +8,7 @@ export const AuditLogsView: React.FC = () => {
     {
       id: 'log_1',
       timestamp: '2026-07-23 13:42:10',
-      user: 'Er. S. N. Adhikari',
+      user: 'Alex Morgan',
       role: 'Senior Division Engineer',
       module: 'Rate Analysis',
       action: 'UPDATE_RATE_ANALYSIS',
@@ -17,7 +17,7 @@ export const AuditLogsView: React.FC = () => {
     {
       id: 'log_2',
       timestamp: '2026-07-23 12:15:30',
-      user: 'Er. B. K. Sharma',
+      user: 'Sam Rivera',
       role: 'Site Engineer',
       module: 'Measurement Book',
       action: 'ADD_MB_ROW',
@@ -35,7 +35,7 @@ export const AuditLogsView: React.FC = () => {
     {
       id: 'log_4',
       timestamp: '2026-07-22 16:30:00',
-      user: 'Mr. Ramesh Karki',
+      user: 'Jordan Lee',
       role: 'Accountant',
       module: 'IPC Bills',
       action: 'APPROVE_IPC',

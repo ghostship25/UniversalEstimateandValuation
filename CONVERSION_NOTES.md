@@ -32,3 +32,12 @@
 - Full Backup & Restore, Saved / NOT SAVED indicator, backup-age chip; sql.js wasm bundled and a CDN-free service worker so the app works offline.
 - Invented numbers removed (contract defaults, fixed 5% retention, 10% advance recovery, fake cumulative, fixed bill dates, fallback rates 145 / 550 / 1200 / 8500, hardcoded 13% tax). New: `advance_recovery_percent` on the contract.
 - Bugs fixed: a false circular-reference guard returned 0 for a formula cell at the same row number in another item; copying an estimate row into the valuation turned a 0 into 1.
+
+## P1 work
+- Real undo / redo (`src/services/docHistory.ts`) replacing the placeholder buttons; recalculations are merged into the edit that caused them.
+- Grid: navigation, range selection, copy / cut / paste, clear, fill down (`src/services/gridNav.ts`, `SpreadsheetCell.tsx`). A cell no longer re-commits an unchanged value.
+- Contract depth: variation summary and Add-to-BOQ, IPC price adjustment, retention release, dynamic certificates, register + CSV (`ipcMath.ts`, `IPCBillView.tsx`, `VariationOrderView.tsx`).
+- Cleanup of leftovers from the original regional version: names, PAN field (now `contractor_tax_id`), Kathmandu address default, Devanagari fonts, a Preeti-encoded string.
+
+## Takeoff rows
+- A takeoff row = one MB row of one item description built from several measurements (count -> No., length -> L / B / H, area -> L x B or perimeter, or a typed value). Blank columns stay blank. Auto-sync keeps the MB row updated; works in the Estimate and Valuation MB, for PDF, image and DXF. Code: `RowsPanel.tsx`, `assembleRow` in `takeoffGeometry.ts`, `TakeoffRow` in `takeoffStore.ts`.

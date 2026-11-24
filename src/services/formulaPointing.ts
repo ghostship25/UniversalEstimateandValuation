@@ -22,6 +22,8 @@ export interface LinkTarget {
   rowIdx: number | null;
   /** canonical column: length | breadth | height | no_of_units | qty | <custom column name> */
   prop: LinkProp;
+  /** grid column (0 N, 1 L, 2 B, 3 H, 4+ custom columns); used for keyboard navigation and range selection */
+  col?: number;
 }
 
 export interface PointSession {

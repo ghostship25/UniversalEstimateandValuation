@@ -1094,7 +1094,7 @@ export const MeasurementBookView: React.FC<MeasurementBookViewProps> = ({
       : `Measurement Book - ${targetBook?.code || 'MB'})`;
 
     const customHeaderHtml = `
-      <div style="text-align: center; font-family: 'Kalimati', 'Nirmala UI', sans-serif; margin-bottom: 16px;">
+      <div style="text-align: center; font-family: sans-serif; margin-bottom: 16px;">
         <div style="font-size: 16pt; font-weight: bold; color: #000;">${authorityName}</div>
         <div style="font-size: 13pt; font-weight: bold; color: #000;">${officeName}</div>
         <div style="font-size: 11pt; font-weight: bold; color: #000;">${officeAddress}</div>
@@ -2672,7 +2672,7 @@ Measurement Book
                       handleUpdateCustomField(item.id, r.id, colName, String(newVal))
                     }
                     onEvaluateFormula={(f) => evaluateMBFormula(f, mbRows, rIdx, project.items)}
-                    linkTarget={/^[A-Za-z0-9_]+$/.test(colName) ? { itemIdx: linkItemIdx, rowIdx: rIdx, prop: colName } : undefined}
+                    linkTarget={/^[A-Za-z0-9_]+$/.test(colName) ? { itemIdx: linkItemIdx, rowIdx: rIdx, prop: colName, col: 4 + (item.custom_column_names || []).indexOf(colName) } : undefined}
                     placeholder={`Enter ${colName}`}
                     className="text-center font-medium"
                     precision={itemPrecision}

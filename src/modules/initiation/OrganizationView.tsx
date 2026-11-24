@@ -13,10 +13,10 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
 }) => {
   const [orgName, setOrgName] = useState('Capital City Metropolitan City Office');
   const [department, setDepartment] = useState('Department of Infrastructure Development');
-  const [address, setAddress] = useState(`Teku, ${selectedZone.name_en}, ${selectedZone.province}`);
+  const [address, setAddress] = useState(`${selectedZone.name_en}${selectedZone.province ? ', ' + selectedZone.province : ''}`);
   const [email, setEmail] = useState('info@example.org');
   const [phone, setPhone] = useState('+1-555-0100');
-  const [panNo, setPanNo] = useState('600123456');
+  const [panNo, setPanNo] = useState('');
 
   const handleSaveOrg = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +83,7 @@ export const OrganizationView: React.FC<OrganizationViewProps> = ({
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">PAN / Tax Register Number</label>
+              <label className="block font-bold text-slate-700 mb-1">Tax Registration No.</label>
               <input
                 type="text"
                 value={panNo}

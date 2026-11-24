@@ -71,7 +71,7 @@ export const UserManualView: React.FC<UserManualViewProps> = ({ onNavigateToTab 
     {
       module: 'Global Header',
       button: 'Zone Schedule Selector',
-      description: 'Switches the active Zone rate database (e.g., Capital City, Sample City, Sample County, Mustang). All resource rates in Rate Analysis & BOQ instantly recalculate.',
+      description: 'Switches the active Zone rate database (e.g., Capital City, Sample City, Sample County, Mountain A). All resource rates in Rate Analysis & BOQ instantly recalculate.',
       tip: 'Zone schedules isolate local material and labor costs independently.',
       tab: 'zone-rates'
     },

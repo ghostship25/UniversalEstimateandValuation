@@ -15,6 +15,7 @@ interface VariationOrderViewProps {
   contract: Contract | null;
   variations: VariationOrder[];
   setVariations: React.Dispatch<React.SetStateAction<VariationOrder[]>>;
+  setProject?: (u: ProjectEstimate | ((prev: ProjectEstimate) => ProjectEstimate)) => void;
   showToast: (msg: string) => void;
 }
 
@@ -23,21 +24,56 @@ export const VariationOrderView: React.FC<VariationOrderViewProps> = ({
   contract,
   variations,
   setVariations,
+  setProject,
   showToast
 }) => {
   const [selectedItemId, setSelectedItemId] = useState<string>(project.items[0]?.id || '');
   const [variationType, setVariationType] = useState<'QUANTITY_VARIATION' | 'EXTRA_ITEM'>('QUANTITY_VARIATION');
-  const [revisedQty, setRevisedQty] = useState<number>(150);
-  const [extraItemCode, setExtraItemCode] = useState('EXT-CIV-01');
-  const [extraDescription, setExtraDescription] = useState('Plum Concrete 1:3:6 with 40% boulders in foundation');
-  const [extraRate, setExtraRate] = useState(8200);
+  const [revisedQty, setRevisedQty] = useState<number>(0);
+  const [extraItemCode, setExtraItemCode] = useState('');
+  const [extraDescription, setExtraDescription] = useState('');
+  const [extraRate, setExtraRate] = useState(0);
+  const [extraUnit, setExtraUnit] = useState('');
+  const [approver, setApprover] = useState('');
 
   const currentItem = project.items.find((i) => i.id === selectedItemId);
+
+
+  // revised contract sum = awarded amount + approved variations
+  const approvedTotal = variations.filter((v) => v.status === 'APPROVED').reduce((s, v) => s + (v.amount_impact || 0), 0);
+  const awarded = contract?.awarded_amount ?? 0;
+  const revisedSum = awarded + approvedTotal;
+  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const inBoq = (v: VariationOrder) => project.items.some((i) => i.item_code === v.item_code && v.type === 'EXTRA_ITEM');
+  const addExtraToBoq = (v: VariationOrder) => {
+    if (!setProject) return;
+    setProject((prev) => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          id: `item_${Date.now()}`,
+          item_id: (prev.items.reduce((m, i) => Math.max(m, i.item_id || 0), 0) || 0) + 1,
+          item_code: v.item_code,
+          description: `${v.description} (${v.variation_no})`,
+          unit: v.unit,
+          estimated_quantity: v.revised_qty,
+          calculated_unit_rate: v.approved_rate,
+          total_amount: Math.round(v.revised_qty * v.approved_rate * 100) / 100,
+          chapter: 'Variations',
+          mb_rows: [],
+        } as any,
+      ],
+    }));
+    showToast(`${v.item_code} added to the BOQ so it can be measured and valued.`);
+  };
 
   const handleCreateVariation = (e: React.FormEvent) => {
     e.preventDefault();
 
     const isExtra = variationType === 'EXTRA_ITEM';
+    if (isExtra && (!extraItemCode.trim() || !extraDescription.trim() || !extraUnit.trim())) { showToast('Enter the extra item code, description and unit.'); return; }
+    if (!isExtra && !currentItem) { showToast('Choose the item to vary.'); return; }
     const origQty = isExtra ? 0 : (currentItem?.estimated_quantity ?? 0);
     const rate = isExtra ? extraRate : (currentItem?.calculated_unit_rate ?? 0);
     const revQty = isExtra ? revisedQty : revisedQty;
@@ -46,18 +82,18 @@ export const VariationOrderView: React.FC<VariationOrderViewProps> = ({
     const newVO: VariationOrder = {
       id: `vo_${Date.now()}`,
       contract_id: contract?.id || 'default_contract',
-      variation_no: `VO-0${variations.length + 1}`,
+      variation_no: `VO-${String(variations.length + 1).padStart(3, '0')}`,
       type: variationType,
-      item_code: isExtra ? extraItemCode : (currentItem?.item_code || 'ITEM'),
-      description: isExtra ? extraDescription : (currentItem?.description || 'Item Description'),
-      unit: isExtra ? 'Cu.m.' : (currentItem?.unit || 'Cu.m.'),
+      item_code: isExtra ? extraItemCode.trim() : (currentItem?.item_code || ''),
+      description: isExtra ? extraDescription.trim() : (currentItem?.description || ''),
+      unit: isExtra ? extraUnit.trim() : (currentItem?.unit || ''),
       original_qty: origQty,
       revised_qty: revQty,
       approved_rate: rate,
       amount_impact: Math.round(impact * 100) / 100,
       status: 'PENDING',
-      approved_by: 'Er. S. N. Adhikari (Senior Division Engineer)',
-      approval_date_iso: '2026-07-10'
+      approved_by: approver.trim(),
+      approval_date_iso: ''
     };
 
     setVariations([...variations, newVO]);
@@ -66,7 +102,7 @@ export const VariationOrderView: React.FC<VariationOrderViewProps> = ({
 
   const handleUpdateStatus = (id: string, status: VariationOrder['status']) => {
     setVariations(
-      variations.map((v) => (v.id === id ? { ...v, status } : v))
+      variations.map((v) => (v.id === id ? { ...v, status, approval_date_iso: status === 'APPROVED' ? new Date().toISOString().slice(0, 10) : v.approval_date_iso } : v))
     );
     showToast(`Variation Order status changed to ${status}.`);
   };
@@ -142,10 +178,14 @@ export const VariationOrderView: React.FC<VariationOrderViewProps> = ({
                   <input
                     type="number"
                     value={extraRate}
-                    onChange={(e) => setExtraRate(parseFloat(e.target.value))}
+                    onChange={(e) => setExtraRate(parseFloat(e.target.value) || 0)}
                     className="w-full p-2.5 border rounded-xl font-mono font-bold"
                     required
                   />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Unit</label>
+                  <input type="text" value={extraUnit} onChange={(e) => setExtraUnit(e.target.value)} placeholder="e.g. Cu.m." className="w-full p-2.5 border rounded-xl font-mono font-bold" required />
                 </div>
               </>
             )}
@@ -190,7 +230,20 @@ export const VariationOrderView: React.FC<VariationOrderViewProps> = ({
       </div>
 
       {/* Variation Orders List Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4" data-testid="vo-summary">
+          {[
+            ['Awarded contract sum', fmt(awarded), 'text-slate-900'],
+            ['Approved variations', `${approvedTotal >= 0 ? '+' : ''}${fmt(approvedTotal)}`, approvedTotal >= 0 ? 'text-emerald-700' : 'text-rose-700'],
+            ['Revised contract sum', fmt(revisedSum), 'text-indigo-800'],
+            ['Change', awarded ? `${((approvedTotal / awarded) * 100).toFixed(2)}%` : 'n/a', 'text-slate-700'],
+          ].map(([k, v, c]) => (
+            <div key={k} className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-[10px] font-bold uppercase text-slate-500">{k}</div>
+              <div className={`font-mono font-extrabold text-lg ${c}`}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
           <GitPullRequest className="w-4 h-4 text-amber-600" />
           Variation Orders Register
@@ -264,6 +317,11 @@ export const VariationOrderView: React.FC<VariationOrderViewProps> = ({
                             <XCircle className="w-4 h-4" />
                           </button>
                         </div>
+                      )}
+                      {v.status === 'APPROVED' && v.type === 'EXTRA_ITEM' && setProject && (
+                        inBoq(v)
+                          ? <span className="text-[10px] font-bold text-emerald-700">In BOQ</span>
+                          : <button data-testid="vo-add-boq" onClick={() => addExtraToBoq(v)} className="px-2 py-1 text-[10px] font-bold rounded bg-indigo-600 text-white hover:bg-indigo-500" title="Add this extra item to the BOQ so it can be measured and valued">Add to BOQ</button>
                       )}
                     </td>
                   </tr>

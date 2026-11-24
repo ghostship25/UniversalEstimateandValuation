@@ -91,6 +91,10 @@ import {
 import { currencyCode } from '../../services/currency';
 
 interface AppShellProps {
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
   contract?: Contract | null;
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -126,6 +130,10 @@ interface AppShellProps {
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
   contract,
   activeTab,
   setActiveTab,
@@ -423,16 +431,20 @@ export const AppShell: React.FC<AppShellProps> = ({
               <Save className="w-3.5 h-3.5 text-emerald-400" />
             </button>
             <button
-              onClick={() => localToast('Undo performed.')}
-              className="p-1 hover:bg-slate-700 hover:text-white rounded transition cursor-pointer"
-              title="Undo"
+              onClick={() => onUndo?.()}
+              disabled={!canUndo}
+              data-testid="undo-btn"
+              className="p-1 hover:bg-slate-700 hover:text-white rounded transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Undo (Ctrl+Z)"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => localToast('Redo performed.')}
-              className="p-1 hover:bg-slate-700 hover:text-white rounded transition cursor-pointer"
-              title="Redo"
+              onClick={() => onRedo?.()}
+              disabled={!canRedo}
+              data-testid="redo-btn"
+              className="p-1 hover:bg-slate-700 hover:text-white rounded transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Redo (Ctrl+Y)"
             >
               <RotateCw className="w-3.5 h-3.5" />
             </button>

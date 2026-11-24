@@ -127,7 +127,7 @@ export const PrintRateAnalysisModal: React.FC<PrintRateAnalysisModalProps> = ({
     }
 
     const customHeaderHtml = `
-      <div style="text-align: center; font-family: 'Kalimati', 'Nirmala UI', sans-serif; margin-bottom: 16px;">
+      <div style="text-align: center; font-family: sans-serif; margin-bottom: 16px;">
         <div style="font-size: 16pt; font-weight: bold; color: #000;">${authorityName}</div>
         <div style="font-size: 13pt; font-weight: bold; color: #000;">${officeName}</div>
         <div style="font-size: 11pt; font-weight: bold; color: #000;">${officeAddress}</div>

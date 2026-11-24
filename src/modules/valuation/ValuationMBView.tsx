@@ -310,9 +310,8 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
     authorityName: project.header_config?.authority_name || "Sample City Authority",
     officeName: project.header_config?.office_name || "Local Authority Office",
     officeAddress: project.header_config?.office_address || "Sample City, Sample County",
-    officeNamePreeti: "O6x/L pk–dxfgu/kflnsf\ngu/ sfo{kflnsfsf] sfof{no\nO6x/L ;'g;/L",
     pageNo: project.header_config?.page_no || "First",
-    projectName: project.title || project.header_config?.document_title_mb || "River protection works at  (Infront of Abhishek Chaudhary's house and Bhotiya Khola, Sample City-15, Sample County",
+    projectName: project.title || project.header_config?.document_title_mb || "River protection and road improvement works",
     contractNo: project.header_config?.contract_no || "CNT/2025/26/01",
     location: project.header_config?.implementation_location || "Sample City -15,16, Sample County",
     contractorName: project.header_config?.contractor_name || "Apex Construction Co., Ward-7, Sample County",
@@ -532,7 +531,7 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
   const [newIpcNo, setNewIpcNo] = useState(activeBooks.length + 1);
   const [newDateBs, setNewDateBs] = useState('2026-11-15');
   const [newRefNo, setNewRefNo] = useState(`MB/VAL/2026-27/0${activeBooks.length + 1}`);
-  const [newVerifiedBy, setNewVerifiedBy] = useState('Er. B. K. Sharma (Site Engineer)');
+  const [newVerifiedBy, setNewVerifiedBy] = useState('Site Engineer');
   const [newRemarks, setNewRemarks] = useState('');
 
   // Edit Book Form State
@@ -960,7 +959,7 @@ export const ValuationMBView: React.FC<ValuationMBViewProps> = ({
     const prec = it?.precision ?? 2;
     const f = Math.pow(10, prec);
     const base = computeRowBaseQuantity(
-      { no: Number(spec.no_of_units), l: Number(spec.length), b: Number(spec.breadth), h: Number(spec.height) },
+      { no: spec.no_of_units === '' ? null : Number(spec.no_of_units), l: spec.length === '' ? null : Number(spec.length), b: spec.breadth === '' ? null : Number(spec.breadth), h: spec.height === '' ? null : Number(spec.height) },
       { no: true, l: true, b: true, h: true }
     );
     return Math.round(base * f) / f;
@@ -3329,7 +3328,7 @@ Measurement Book
                                           onChange={(val) => handleUpdateCustomField(item.id, r.id, colName, String(val))}
                                           precision={item.precision ?? 2}
                                           onEvaluateFormula={(f) => evaluateMBFormula(f, itemValRows as any[], rIdx, valuationEnrichedItems)}
-                                          linkTarget={/^[A-Za-z0-9_]+$/.test(colName) ? { itemIdx: valuationEnrichedItems.findIndex((it) => it.id === item.id), rowIdx: rIdx, prop: colName } : undefined}
+                                          linkTarget={/^[A-Za-z0-9_]+$/.test(colName) ? { itemIdx: valuationEnrichedItems.findIndex((it) => it.id === item.id), rowIdx: rIdx, prop: colName, col: 4 + (item.custom_column_names || []).indexOf(colName) } : undefined}
                                         />
                                       </td>
                                     ))}

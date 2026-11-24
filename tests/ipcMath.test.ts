@@ -3,6 +3,30 @@ import { computeIpc } from '../src/services/ipcMath';
 
 const base = { grossThisBill: 100000, grossBeforeThisBill: 0, retentionPercent: 5, advanceGiven: 0, advanceRecoveryPercent: 0, advanceRecoveredBefore: 0, taxPercent: 10 };
 
+describe('IPC: price adjustment and retention release', () => {
+  const b = { grossThisBill: 100000, grossBeforeThisBill: 0, retentionPercent: 10, advanceGiven: 0, advanceRecoveryPercent: 0, advanceRecoveredBefore: 0, taxPercent: 0 };
+  it('price adjustment raises the certified value, retention follows it', () => {
+    const r = computeIpc({ ...b, priceAdjustmentPercent: 5 });
+    expect(r).toMatchObject({ priceAdjustment: 5000, adjustedGross: 105000, retention: 10500, net: 94500 });
+    expect(r.grossCumulative).toBe(100000);
+  });
+  it('a negative adjustment reduces it', () => expect(computeIpc({ ...b, priceAdjustmentPercent: -2 }).adjustedGross).toBe(98000));
+  it('retention is released back into the payment, capped at what is held', () => {
+    const r = computeIpc({ ...b, retentionHeldBefore: 20000, retentionRelease: 15000 });
+    expect(r.retention).toBe(10000); expect(r.retentionReleased).toBe(15000);
+    expect(r.retentionHeld).toBe(15000); expect(r.net).toBe(90000 + 15000);
+    const capped = computeIpc({ ...b, retentionHeldBefore: 0, retentionRelease: 99999 });
+    expect(capped.retentionReleased).toBe(10000); expect(capped.retentionHeld).toBe(0);
+  });
+  it('released retention is not taxed again', () => {
+    const r = computeIpc({ ...b, taxPercent: 10, retentionHeldBefore: 5000, retentionRelease: 5000 });
+    expect(r.tax).toBe(9000); expect(r.net).toBe(90000 + 9000 + 5000);
+  });
+  it('already released retention is not released twice', () => {
+    expect(computeIpc({ ...b, retentionHeldBefore: 5000, retentionReleasedBefore: 5000, retentionPercent: 0, retentionRelease: 3000 }).retentionReleased).toBe(0);
+  });
+});
+
 describe('IPC maths', () => {
   it('retention, tax and net on a simple bill', () => {
     const r = computeIpc(base);

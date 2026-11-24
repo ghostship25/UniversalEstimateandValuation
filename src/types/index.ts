@@ -383,7 +383,7 @@ export interface Contract {
   contract_number: string;
   contract_title: string;
   contractor_name: string;
-  contractor_pan?: string;
+  contractor_tax_id?: string;
   awarded_amount: number;
   engineer_estimate_amount: number;
   tender_discount_percent: number;
@@ -444,6 +444,9 @@ export interface IPCBill {
   gross_amount_this_bill: number;
   gross_amount_cumulative: number;
   retention_deduction: number;
+  price_adjustment_percent?: number;
+  price_adjustment_amount?: number;
+  retention_released?: number;
   advance_deduction: number;
   tax_amount: number;
   net_payable_amount: number;

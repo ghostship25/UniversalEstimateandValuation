@@ -40,7 +40,7 @@ export const ProjectSnapshotModal: React.FC<ProjectSnapshotModalProps> = ({
     {
       id: 'log-1',
       timestamp: new Date().toLocaleDateString('ne-NP') + ' 10:30 AM',
-      user: 'Er. Rajesh Acharya',
+      user: 'Alex Morgan',
       role: 'Senior Division Engineer',
       module: 'Project Initialization',
       action: 'INITIALIZE_SNAPSHOT',
@@ -49,7 +49,7 @@ export const ProjectSnapshotModal: React.FC<ProjectSnapshotModalProps> = ({
     {
       id: 'log-2',
       timestamp: new Date().toLocaleDateString('ne-NP') + ' 11:15 AM',
-      user: 'Er. Rajesh Acharya',
+      user: 'Alex Morgan',
       role: 'Senior Division Engineer',
       module: 'Estimate Sanction',
       action: 'TECHNICAL_SANCTION',
